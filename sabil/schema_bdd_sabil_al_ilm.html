@@ -1,0 +1,536 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.wrap { padding: 16px 0; }
+.section-title { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; margin: 24px 0 8px; padding-left: 4px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.table-card { border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-lg); overflow: hidden; }
+.table-head { padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+.table-head .icon { width: 20px; height: 20px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.table-head .name { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+.table-head .sub { font-size: 11px; color: var(--color-text-tertiary); margin-left: auto; }
+.fields { padding: 0 14px 10px; display: flex; flex-direction: column; gap: 3px; }
+.field { display: flex; align-items: center; gap: 6px; font-size: 11.5px; padding: 2px 0; }
+.field .fname { color: var(--color-text-secondary); flex: 1; }
+.field .ftype { font-size: 10px; color: var(--color-text-tertiary); font-family: var(--font-mono); background: var(--color-background-secondary); padding: 1px 5px; border-radius: 3px; }
+.badge { font-size: 9px; font-weight: 500; padding: 1px 5px; border-radius: 3px; }
+.pk { background: #E6F1FB; color: #0C447C; }
+.fk { background: #EAF3DE; color: #27500A; }
+.idx { background: #FAEEDA; color: #633806; }
+.sep { height: 0.5px; background: var(--color-border-tertiary); margin: 6px 0; }
+
+.blue .table-head { background: #E6F1FB; border-bottom: 0.5px solid #B5D4F4; }
+.blue .icon { background: #378ADD; color: #fff; }
+.teal .table-head { background: #E1F5EE; border-bottom: 0.5px solid #9FE1CB; }
+.teal .icon { background: #1D9E75; color: #fff; }
+.amber .table-head { background: #FAEEDA; border-bottom: 0.5px solid #FAC775; }
+.amber .icon { background: #BA7517; color: #fff; }
+.purple .table-head { background: #EEEDFE; border-bottom: 0.5px solid #CECBF6; }
+.purple .icon { background: #534AB7; color: #fff; }
+.coral .table-head { background: #FAECE7; border-bottom: 0.5px solid #F5C4B3; }
+.coral .icon { background: #D85A30; color: #fff; }
+.green .table-head { background: #EAF3DE; border-bottom: 0.5px solid #C0DD97; }
+.green .icon { background: #3B6D11; color: #fff; }
+.pink .table-head { background: #FBEAF0; border-bottom: 0.5px solid #F4C0D1; }
+.pink .icon { background: #D4537E; color: #fff; }
+.red .table-head { background: #FCEBEB; border-bottom: 0.5px solid #F7C1C1; }
+.red .icon { background: #A32D2D; color: #fff; }
+.gray .table-head { background: #F1EFE8; border-bottom: 0.5px solid #D3D1C7; }
+.gray .icon { background: #5F5E5A; color: #fff; }
+
+@media (prefers-color-scheme: dark) {
+  .blue .table-head { background: #042C53; border-bottom-color: #0C447C; }
+  .teal .table-head { background: #04342C; border-bottom-color: #085041; }
+  .amber .table-head { background: #412402; border-bottom-color: #633806; }
+  .purple .table-head { background: #26215C; border-bottom-color: #3C3489; }
+  .coral .table-head { background: #4A1B0C; border-bottom-color: #712B13; }
+  .green .table-head { background: #173404; border-bottom-color: #27500A; }
+  .pink .table-head { background: #4B1528; border-bottom-color: #72243E; }
+  .red .table-head { background: #501313; border-bottom-color: #791F1F; }
+  .gray .table-head { background: #2C2C2A; border-bottom-color: #444441; }
+  .pk { background: #042C53; color: #85B7EB; }
+  .fk { background: #173404; color: #97C459; }
+  .idx { background: #412402; color: #FAC775; }
+  .ftype { background: #2C2C2A !important; }
+}
+</style>
+
+<div class="wrap">
+
+<div class="section-title">Authentification & Comptes</div>
+<div class="grid">
+
+  <div class="table-card blue">
+    <div class="table-head"><div class="icon">U</div><div class="name">users</div><div class="sub">Tous les comptes</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="fname">email</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">password_hash</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">display_name</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">nom_diplome</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">role</span><span class="ftype">ENUM</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">must_change_password</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">is_active</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">first_login_done</span><span class="ftype">BOOLEAN</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">created_by</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">updated_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">last_login_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card gray">
+    <div class="table-head"><div class="icon">S</div><div class="name">sessions</div><div class="sub">Connexions actives</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="badge fk" style="width:fit-content;margin-bottom:4px">FK</div>
+      <div class="field"><span class="fname">user_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">token_hash</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">ip_address</span><span class="ftype">INET</span></div>
+      <div class="field"><span class="fname">user_agent</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">expires_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Classes & Inscriptions</div>
+<div class="grid">
+
+  <div class="table-card teal">
+    <div class="table-head"><div class="icon">C</div><div class="name">classes</div><div class="sub">Table principale</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="fname">nom</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">programme</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">niveau</span><span class="ftype">VARCHAR</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">professeur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">admin_id</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">jour_semaine</span><span class="ftype">SMALLINT</span></div>
+      <div class="field"><span class="fname">heure_debut</span><span class="ftype">TIME</span></div>
+      <div class="field"><span class="fname">duree_minutes</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">date_debut_session</span><span class="ftype">DATE</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">taux_horaire</span><span class="ftype">DECIMAL</span></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">couleur</span><span class="ftype">ENUM</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">creneau_confirme</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">derniere_activite</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card green">
+    <div class="table-head"><div class="icon">I</div><div class="name">inscriptions</div><div class="sub">Élève ↔ Classe</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">eleve_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">date_inscription</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">nom_diplome</span><span class="ftype">VARCHAR</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">contrat_signe</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">contrat_signe_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">contrat_ip</span><span class="ftype">INET</span></div>
+    </div>
+  </div>
+
+  <div class="table-card amber">
+    <div class="table-head"><div class="icon">H</div><div class="name">historique_creneaux</div><div class="sub">Changements horaires</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">modifie_par</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">ancien_jour</span><span class="ftype">SMALLINT</span></div>
+      <div class="field"><span class="fname">ancienne_heure</span><span class="ftype">TIME</span></div>
+      <div class="field"><span class="fname">nouveau_jour</span><span class="ftype">SMALLINT</span></div>
+      <div class="field"><span class="fname">nouvelle_heure</span><span class="ftype">TIME</span></div>
+      <div class="field"><span class="fname">notif_direction_envoyee</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Présences & Absences</div>
+<div class="grid">
+
+  <div class="table-card coral">
+    <div class="table-head"><div class="icon">P</div><div class="name">presences</div><div class="sub">Élèves par séance</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">eleve_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">seance_id</span><span class="ftype">UUID → seances</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">heure_connexion</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">heure_deconnexion</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">retard_minutes</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">corrige_par_prof</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">note_prof</span><span class="ftype">TEXT</span></div>
+    </div>
+  </div>
+
+  <div class="table-card red">
+    <div class="table-head"><div class="icon">A</div><div class="name">absences_profs</div><div class="sub">Signalements admins</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">professeur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">signale_par</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">date_absence</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">type</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">retard_minutes</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">source</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">remarque</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card gray">
+    <div class="table-head"><div class="icon">Q</div><div class="name">questions_entree</div><div class="sub">Check avant cours</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">eleve_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">prof_absent</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">prof_en_retard</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">retard_minutes</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">notif_envoyee</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Messagerie & Chat</div>
+<div class="grid">
+
+  <div class="table-card purple">
+    <div class="table-head"><div class="icon">M</div><div class="name">messages</div><div class="sub">Tout le chat</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">expediteur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">type_canal</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">contenu</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">type_message</span><span class="ftype">ENUM</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">fichier_id</span><span class="ftype">UUID → fichiers</span></div>
+      <div class="field"><span class="fname">is_systeme</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">reply_to</span><span class="ftype">UUID → messages</span></div>
+      <div class="field"><span class="fname">lu_par</span><span class="ftype">UUID[]</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">deleted_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card purple">
+    <div class="table-head"><div class="icon">V</div><span class="name">messages_prives</span><div class="sub">Admin ↔ Élève</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">expediteur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">destinataire_id</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">contenu</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">type_message</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">fichier_id</span><span class="ftype">UUID → fichiers</span></div>
+      <div class="field"><span class="fname">lu</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">lu_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card pink">
+    <div class="table-head"><div class="icon">G</div><div class="name">annonces_groupe</div><div class="sub">Profs / Admins</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">auteur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">cible</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">contenu</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">fichier_id</span><span class="ftype">UUID → fichiers</span></div>
+      <div class="field"><span class="fname">is_template</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">titre_template</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Fichiers & Supports</div>
+<div class="grid">
+
+  <div class="table-card blue">
+    <div class="table-head"><div class="icon">F</div><div class="name">fichiers</div><div class="sub">Stockage cloud</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">uploade_par</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">nom_original</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">nom_stockage</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">url_cloud</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">type_fichier</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">mime_type</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">taille_bytes</span><span class="ftype">BIGINT</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card teal">
+    <div class="table-head"><div class="icon">D</div><div class="name">devoirs</div><div class="sub">Élève → Prof</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">eleve_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">fichier_id</span><span class="ftype">UUID → fichiers</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">titre</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">note</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">commentaire_prof</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">submitted_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card amber">
+    <div class="table-head"><div class="icon">E</div><div class="name">enregistrements</div><div class="sub">Cours enregistrés</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">seance_id</span><span class="ftype">UUID → seances</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">demarre_par</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">url_video</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">duree_secondes</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">taille_bytes</span><span class="ftype">BIGINT</span></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">started_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">ended_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Cours en direct & Séances</div>
+<div class="grid">
+
+  <div class="table-card coral">
+    <div class="table-head"><div class="icon">S</div><div class="name">seances</div><div class="sub">Chaque cours</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">date_seance</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">heure_debut_reelle</span><span class="ftype">TIME</span></div>
+      <div class="field"><span class="fname">duree_reelle_min</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">jitsi_room_id</span><span class="ftype">VARCHAR</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">creneau_valide_prof</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card gray">
+    <div class="table-head"><div class="icon">T</div><div class="name">tableau_blanc</div><div class="sub">Historique stylo</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">seance_id</span><span class="ftype">UUID → seances</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">auteur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">snapshot_json</span><span class="ftype">JSONB</span></div>
+      <div class="field"><span class="fname">type_action</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Paiements & Factures</div>
+<div class="grid">
+
+  <div class="table-card green">
+    <div class="table-head"><div class="icon">F</div><div class="name">factures</div><div class="sub">Profs → Élèves</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">professeur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">periode_mois</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">lignes_cours</span><span class="ftype">JSONB</span></div>
+      <div class="field"><span class="fname">nb_eleves</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">taux_horaire</span><span class="ftype">DECIMAL</span></div>
+      <div class="field"><span class="fname">montant_total</span><span class="ftype">DECIMAL</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">lien_paypal</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">rib</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">date_echeance</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card amber">
+    <div class="table-head"><div class="icon">R</div><div class="name">rappels_paiement</div><div class="sub">Automatiques</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">facture_id</span><span class="ftype">UUID → factures</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">numero_rappel</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="fname">envoye_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">prochain_rappel</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">statut</span><span class="ftype">ENUM</span></div>
+    </div>
+  </div>
+
+  <div class="table-card blue">
+    <div class="table-head"><div class="icon">P</div><div class="name">paiements</div><div class="sub">Historique réglements</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">facture_id</span><span class="ftype">UUID → factures</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">confirme_par</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">montant</span><span class="ftype">DECIMAL</span></div>
+      <div class="field"><span class="fname">methode</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">reference</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">paid_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Diplômes & Progression</div>
+<div class="grid">
+
+  <div class="table-card pink">
+    <div class="table-head"><div class="icon">D</div><div class="name">diplomes</div><div class="sub">Rempli par le prof</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">eleve_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">professeur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="sep"></div>
+      <div class="field"><span class="fname">matiere</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">note_orale</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">note_ecrite</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">appreciation</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">nom_eleve_diplome</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">delivre_at</span><span class="ftype">DATE</span></div>
+    </div>
+  </div>
+
+  <div class="table-card teal">
+    <div class="table-head"><div class="icon">C</div><div class="name">catalogue_cours</div><div class="sub">Progression élève</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="fname">nom</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">description</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">niveau</span><span class="ftype">INTEGER</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">prerequis_id</span><span class="ftype">UUID → catalogue</span></div>
+      <div class="field"><span class="fname">ordre</span><span class="ftype">INTEGER</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Notifications & Planning</div>
+<div class="grid-3">
+
+  <div class="table-card blue">
+    <div class="table-head"><div class="icon">N</div><div class="name">notifications</div><div class="sub">Tous types</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">destinataire_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">type</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">titre</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">contenu</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">lien</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">lu</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card purple">
+    <div class="table-head"><div class="icon">P</div><div class="name">planning_dispos</div><div class="sub">Créneaux profs</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">professeur_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">jour_semaine</span><span class="ftype">SMALLINT</span></div>
+      <div class="field"><span class="fname">heure_debut</span><span class="ftype">TIME</span></div>
+      <div class="field"><span class="fname">heure_fin</span><span class="ftype">TIME</span></div>
+      <div class="field"><span class="fname">disponible</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="fname">couleur</span><span class="ftype">ENUM</span></div>
+    </div>
+  </div>
+
+  <div class="table-card amber">
+    <div class="table-head"><div class="icon">T</div><div class="name">taches_direction</div><div class="sub">Lumière clignotante</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="fname">titre</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">description</span><span class="ftype">TEXT</span></div>
+      <div class="field"><span class="fname">cible</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">faite</span><span class="ftype">BOOLEAN</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">faite_par</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">faite_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card gray">
+    <div class="table-head"><div class="icon">R</div><div class="name">rapports_auto</div><div class="sub">Envois quotidiens</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="fname">type_rapport</span><span class="ftype">ENUM</span></div>
+      <div class="field"><span class="fname">periode_debut</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">periode_fin</span><span class="ftype">DATE</span></div>
+      <div class="field"><span class="fname">contenu_json</span><span class="ftype">JSONB</span></div>
+      <div class="field"><span class="fname">envoye_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+  <div class="table-card coral">
+    <div class="table-head"><div class="icon">C</div><div class="name">contrats</div><div class="sub">Signature digitale</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">eleve_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">classe_id</span><span class="ftype">UUID → classes</span></div>
+      <div class="field"><span class="fname">version_reglement</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">signe_at</span><span class="ftype">TIMESTAMP</span></div>
+      <div class="field"><span class="fname">ip_signature</span><span class="ftype">INET</span></div>
+      <div class="field"><span class="fname">contenu_snapshot</span><span class="ftype">TEXT</span></div>
+    </div>
+  </div>
+
+  <div class="table-card green">
+    <div class="table-head"><div class="icon">L</div><div class="name">logs_activite</div><div class="sub">Audit complet</div></div>
+    <div class="fields">
+      <div class="field"><span class="badge pk">PK</span><span class="fname">id</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="badge fk">FK</span><span class="fname">user_id</span><span class="ftype">UUID → users</span></div>
+      <div class="field"><span class="fname">action</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">table_cible</span><span class="ftype">VARCHAR</span></div>
+      <div class="field"><span class="fname">id_cible</span><span class="ftype">UUID</span></div>
+      <div class="field"><span class="fname">details_json</span><span class="ftype">JSONB</span></div>
+      <div class="field"><span class="fname">ip_address</span><span class="ftype">INET</span></div>
+      <div class="field"><span class="fname">created_at</span><span class="ftype">TIMESTAMP</span></div>
+    </div>
+  </div>
+
+</div>
+</div>

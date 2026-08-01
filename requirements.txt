@@ -1,0 +1,10 @@
+asgiref==3.10.0
+Django==5.2.7
+django-cors-headers==4.9.0
+djangorestframework==3.16.1
+numpy
+python-magic==0.4.27
+reverse-geocoder==1.5.1
+scipy==1.16.2
+sqlparse==0.5.3
+tzdata==2025.2
