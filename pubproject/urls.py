@@ -23,8 +23,6 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('pubbudgetapp.urls')),
-    path('generatemobileapp/', include('generatemobileapp.urls')),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/', include('sabil.urls')),  # ← ton app avec views.py/urls.py
