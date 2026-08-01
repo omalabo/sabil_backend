@@ -9,9 +9,9 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-
-from pathlib import Path
 import os
+from pathlib import Path
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,13 +19,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-backup-key-only-for-dev')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-backup-key-only-for-local-dev')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')
+# Autoriser les domaines de production (séparés par des virgules dans l'env)
+allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = allowed_hosts.split(',') if allowed_hosts else ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -50,7 +53,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            # En prod, cela pointera vers le conteneur Redis de Coolify
+            # En prod, Coolify injectera REDIS_HOST='sabil-redis'
             "hosts": [(os.environ.get('REDIS_HOST', '127.0.0.1'), int(os.environ.get('REDIS_PORT', 6379)))],
         },
     },
@@ -77,14 +80,15 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
 ]
-# En production, on désactive l'ouverture totale
+# En prod, on désactive l'ouverture totale
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'False') == 'True'
 
-# On définit les origines autorisées via variable d'environnement
-cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8000')
+# On définit les origines autorisées via variable d'environnement (séparées par des virgules)
+cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8000,http://10.68.60.41')
 CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else []
-
 CORS_ALLOW_CREDENTIALS = True
+
+
 MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
 ROOT_URLCONF = 'pubproject.urls'
 
@@ -114,10 +118,10 @@ WSGI_APPLICATION = 'pubproject.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', 'sabil'),
+        'NAME': os.environ.get('POSTGRES_DB', 'sabil-db'),
         'USER': os.environ.get('POSTGRES_USER', 'sabil_user'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'Roum@ou94'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'), # Sera 'sabil-db' en prod
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'), # En prod, ce sera 'sabil-db'
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
@@ -219,14 +223,14 @@ AUTH_USER_MODEL = 'sabil.Users'  # ← Remplace 'sabil' par le nom de ton app si
 TIME_ZONE = 'Africa/Casablanca'
 LANGUAGE_CODE = 'fr-fr'
 
-# En dev : console. En prod : SMTP réel configuré dans Coolify
+# En dev (DEBUG=True) : affiche dans la console. En prod (DEBUG=False) : utilise le SMTP réel.
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.example.com')
     EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-    EMAIL_USE_TLS = True
+    EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
     EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
     DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@sabil.com')
