@@ -119,7 +119,7 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB', 'sabil-db'),
         'USER': os.environ.get('POSTGRES_USER', 'sabil_user'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'Roum@ou94'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'), # En prod, ce sera 'sabil-db'
+        'HOST': os.environ.get('POSTGRES_HOST', 'sabil-db'), # En prod, ce sera 'sabil-db'
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
@@ -160,7 +160,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
-
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
