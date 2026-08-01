@@ -82,3 +82,7 @@ vine==5.1.0
 wcwidth==0.6.0
 yarl==1.23.0
 zope.interface==8.4
+gunicorn==22.0.0
+uvicorn[standard]==0.30.1
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
