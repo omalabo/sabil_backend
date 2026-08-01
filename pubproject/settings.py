@@ -24,9 +24,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-backup-key-only-for-local-dev')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+#DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = False
 
 # Autoriser les domaines de production (séparés par des virgules dans l'env)
+
+#allowed_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
+#ALLOWED_HOSTS = allowed_hosts.split(',') if allowed_hosts else ['localhost', '127.0.0.1'],
+
 ALLOWED_HOSTS = [
     '57.131.134.241',           # IP publique de ton serveur OVH
     'localhost',
