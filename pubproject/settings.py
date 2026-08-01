@@ -119,7 +119,7 @@ DATABASES = {
         'NAME': os.environ.get('POSTGRES_DB', 'sabil-db'),
         'USER': os.environ.get('POSTGRES_USER', 'sabil_user'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', 'Roum@ou94'),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'), # En prod, ce sera 'sabil-db'
+        'HOST': os.environ.get('POSTGRES_HOST', 'sabil-db'), # En prod, ce sera 'sabil-db'
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
