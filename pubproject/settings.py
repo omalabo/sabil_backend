@@ -84,7 +84,7 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
 
 # On définit les origines autorisées via variable d'environnement (séparées par des virgules)
-cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8000')
+cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8000,http://57.131.134.241:8001')
 CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else []
 CORS_ALLOW_CREDENTIALS = True
 
