@@ -51,7 +51,6 @@ prometheus_client==0.25.0
 prompt_toolkit==3.0.52
 propcache==0.4.1
 protobuf==7.34.1
-psycopg2==2.9.11
 py-ubjson==0.16.1
 pyasn1==0.6.3
 pyasn1_modules==0.4.2
