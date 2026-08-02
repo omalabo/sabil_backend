@@ -25,7 +25,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-backup-key-only-for-l
 
 # SECURITY WARNING: don't run with debug turned on in production!
 #DEBUG = os.environ.get('DEBUG', 'True') == 'True'
-DEBUG = False
+DEBUG = True
 
 # Autoriser les domaines de production (séparés par des virgules dans l'env)
 
