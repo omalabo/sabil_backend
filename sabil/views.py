@@ -4612,7 +4612,7 @@ class StartSessionView(APIView):
             )
 
         if user.role == "professeur":
-            admin = user.admin_id
+            admin = user.admin
             Notifications.objects.create(
             id=uuid.uuid4(),
             destinataire=admin,
