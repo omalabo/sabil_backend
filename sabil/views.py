@@ -4598,17 +4598,18 @@ class StartSessionView(APIView):
 
        
 
-        direction = Users.objects.get(role='direction', is_active=True)
-        Notifications.objects.create(
-            id=uuid.uuid4(),
-            destinataire=direction,
-            type='cours_demarrer',
-            titre='Cours démarré',
-            contenu=f'Salle ouverte pour {classe.nom}',
-            lu=False,
-            classe=classe,
-            created_at=timezone.now(),
-        )
+        if user.role == "direction":
+            direction = Users.objects.get(role='direction', is_active=True)
+            Notifications.objects.create(
+                id=uuid.uuid4(),
+                destinataire=direction,
+                type='cours_demarrer',
+                titre='Cours démarré',
+                contenu=f'Salle ouverte pour {classe.nom}',
+                lu=False,
+                classe=classe,
+                created_at=timezone.now(),
+            )
 
         if user.role == "professeur":
             admin = user.admin_id
