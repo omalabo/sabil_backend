@@ -4612,10 +4612,9 @@ class StartSessionView(APIView):
             )
 
         if user.role == "professeur":
-            admin = user.admin
             Notifications.objects.create(
             id=uuid.uuid4(),
-            destinataire=admin,
+            destinataire_id=user.admin_id,
             type='cours_demarrer',
             titre='Cours démarré',
             contenu=f'Salle ouverte pour {classe.nom}',
