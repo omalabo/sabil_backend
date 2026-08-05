@@ -57,7 +57,8 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             # En prod, Coolify injectera REDIS_HOST='sabil-redis'
             #"hosts": [(os.environ.get('REDIS_HOST', '127.0.0.1'), int(os.environ.get('REDIS_PORT', 6379)))],
-            "hosts": [os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")],
+            #"hosts": [os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")],
+            "hosts": [os.environ.get("REDIS_URL", "redis://default:SN8ru51Lm4T0p8YM3LxHvtoLlmAMWXfZThj1kC01GnplRwzmlx92c1pNHxvAPbx4@wyus0upsk4oam8hdk440d7sj:6379/0")],
         },
     },
 }
