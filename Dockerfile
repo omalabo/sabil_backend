@@ -28,7 +28,7 @@ COPY . .
 RUN python manage.py collectstatic --noinput
 
 # Exposer le port 8000
-EXPOSE 8001
+EXPOSE 8000
 
 # Commande de démarrage : Gunicorn avec des workers Uvicorn pour supporter les WebSockets (ASGI)
 # "pubproject.asgi:application" correspond à ton fichier asgi.py
