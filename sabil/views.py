@@ -22,7 +22,7 @@ from livekit import api  # ← Nouveau package LiveKit
 # Clés API LiveKit (à mettre dans settings.py ou .env)
 LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY', 'APImyschool2026')
 LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET', 'secretmyschool2026xK9mP3qR7vL2nW8')
-LIVEKIT_URL = os.getenv('LIVEKIT_URL', 'ws://172.16.87.85:7880')
+LIVEKIT_URL = os.getenv('LIVEKIT_URL', 'ws://live.sabil-al-ilm.org')
 
 from rest_framework.exceptions import PermissionDenied
 from django.db.models.functions import TruncDate, Cast
