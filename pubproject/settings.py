@@ -25,7 +25,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-backup-key-only-for-l
 
 # SECURITY WARNING: don't run with debug turned on in production!
 #DEBUG = os.environ.get('DEBUG', 'True') == 'True'
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # Autoriser les domaines de production (séparés par des virgules dans l'env)
 
@@ -88,10 +88,10 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
 
 # On définit les origines autorisées via variable d'environnement (séparées par des virgules)
-cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8000,http://57.131.134.241:8001')
+cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://app.sabil-al-ilm.org,http://localhost:3000,http://localhost:8000,http://57.131.134.241:8001')
 CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else []
 CORS_ALLOW_CREDENTIALS = True
-
+CSRF_TRUSTED
 
 MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
 ROOT_URLCONF = 'pubproject.urls'
