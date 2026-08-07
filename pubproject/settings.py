@@ -91,7 +91,12 @@ CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True') == 'Tr
 cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://app.sabil-al-ilm.org,http://localhost:3000,http://localhost:8000,http://57.131.134.241:8001')
 CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else []
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED
+# 3. Origines de confiance pour les requêtes POST/PUT (CSRF) avec HTTPS
+csrf_origins = os.environ.get(
+    'CSRF_TRUSTED_ORIGINS', 
+    'https://app.sabil-al-ilm.org,https://api.sabil-al-ilm.org'
+)
+CSRF_TRUSTED_ORIGINS = csrf_origins.split(',') if csrf_origins else []
 
 MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
 ROOT_URLCONF = 'pubproject.urls'
