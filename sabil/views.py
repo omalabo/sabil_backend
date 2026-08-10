@@ -1587,11 +1587,21 @@ class InscriptionViewSet(viewsets.ModelViewSet):
     serializer_class = InscriptionSerializer  # ← AJOUTER CETTE LIGNE
 
     def get_queryset(self):
-        """Filtrage par classe via ?classe={id} + expansion de l'élève"""
+        """Filtrage par classe via ?classe={id} + expansion de l'élève
+        + filtrage par genre : n'affiche que les élèves du même genre que le professeur"""
         qs = super().get_queryset()
         classe_id = self.request.query_params.get('classe')
+    
         if classe_id:
             qs = qs.filter(classe_id=classe_id)
+    
+            # 🔍 Récupère le professeur de cette classe pour connaître son genre
+            classe = Classes.objects.select_related('professeur').filter(id=classe_id).first()
+    
+            if classe and classe.professeur and classe.professeur.homme_femme:
+                genre_prof = classe.professeur.homme_femme
+                qs = qs.filter(eleve__homme_femme=genre_prof)
+    
         return qs.select_related('eleve')  # ✅ Optimisation N+1
 
     def perform_create(self, serializer):
