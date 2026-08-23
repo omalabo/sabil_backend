@@ -78,7 +78,8 @@ import asyncio
 @permission_classes([IsAuthenticated])
 def toggle_recording(request, classe_id):
     classe = get_object_or_404(Classes, id=classe_id)
-    derniere_presence = Presences.objects.filter(classe=classe).order_by('-heure_connexion').first()
+    today = timezone.now().date()
+    derniere_presence = Presences.objects.filter(classe=classe, date_seance=today).order_by('-heure_connexion').first()
     room_name = derniere_presence.jitsi_room_id if derniere_presence else None
 
     if not room_name:
