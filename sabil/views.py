@@ -18,7 +18,7 @@ from .models import *
 from .serializers import *
 from rest_framework_simplejwt.tokens import RefreshToken
 logger = logging.getLogger(__name__)
-from livekit import api  # ← Nouveau package LiveKit
+from livekit import api,webhook  # ← Nouveau package LiveKit
 # Clés API LiveKit (à mettre dans settings.py ou .env)
 LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY', 'APImyschool2026')
 LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET', 'secretmyschool2026xK9mP3qR7vL2nW8')
@@ -65,13 +65,11 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from livekit.api import TokenVerifier, WebhookReceiver
 
+from rest_framework.permissions import AllowAny
+
 # ... (tes constantes LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
 
-# 1. Créer le vérificateur de token avec ta clé et ton secret
-token_verifier = TokenVerifier(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-
-# 2. Initialiser le receveur de webhook avec ce vérificateur
-webhook_receiver = WebhookReceiver(token_verifier)
+webhook_receiver = webhook.WebhookReceiver(LIVEKIT_API_SECRET)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -150,10 +148,14 @@ def toggle_recording(request, classe_id):
         }, status=500)
 
 
+
+
 # ──────────────────────────────────────────────────────────────
 # 2. WEBHOOK LIVEKIT (Reçoit la fin de l'enregistrement)
 # ──────────────────────────────────────────────────────────────
-@csrf_exempt # LiveKit ne peut pas fournir de token CSRF Django
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])  # AllowAny est sécurisé ici car on vérifie la signature JWT manuellement juste après
 def livekit_webhook(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -167,7 +169,7 @@ def livekit_webhook(request):
         token = auth_header.split(' ')[1]
         
         try:
-            # Cette méthode vérifie la signature ET parse le JSON en objet WebhookEvent
+            # Cette méthode du SDK vérifie la signature ET parse le JSON en objet WebhookEvent
             event = webhook_receiver.receive(token, request.body)
         except Exception as e:
             print(f"❌ Signature webhook invalide ou erreur de parsing: {e}")
@@ -242,6 +244,7 @@ def livekit_webhook(request):
     except Exception as e:
         print(f"❌ Erreur Webhook LiveKit: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
+     
 
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
