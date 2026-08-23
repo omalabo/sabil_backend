@@ -63,10 +63,15 @@ import random
 
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from livekit.api import WebhookReceiver
+from livekit.api import TokenVerifier, WebhookReceiver
 
-# Initialisation du vérificateur de webhook (une seule fois au chargement du module)
-webhook_receiver = WebhookReceiver(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+# ... (tes constantes LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+
+# 1. Créer le vérificateur de token avec ta clé et ton secret
+token_verifier = TokenVerifier(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+
+# 2. Initialiser le receveur de webhook avec ce vérificateur
+webhook_receiver = WebhookReceiver(token_verifier)
 
 
 # ──────────────────────────────────────────────────────────────
