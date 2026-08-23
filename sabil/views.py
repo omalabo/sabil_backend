@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, generics,status, serializers, parsers, filters
 from rest_framework.response import Response
 import os
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes,authentication_classes
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
