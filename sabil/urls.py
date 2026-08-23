@@ -75,10 +75,10 @@ urlpatterns = [
     # urls.py
     path('mes-diplomes/', views.MyDiplomesView.as_view(), name='my-diplomes'),
     # Enregistrement vidéo LiveKit
-    path('api/classes/<uuid:classe_id>/toggle-recording/', views.toggle_recording, name='toggle_recording'),
+    path('classes/<uuid:classe_id>/toggle-recording/', views.toggle_recording, name='toggle_recording'),
 
     # Webhook LiveKit (appelé par le serveur LiveKit)
-    path('api/livekit/webhook/', views.livekit_webhook, name='livekit_webhook'),
+    path('livekit/webhook/', views.livekit_webhook, name='livekit_webhook'),
     
     path('classes/<uuid:classe_id>/eleves/', views.ElevesByClasseView.as_view(), name='classe-eleves'),
     # Authentification & Mot de passe
