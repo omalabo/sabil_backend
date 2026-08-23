@@ -1,7 +1,7 @@
 from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from ton_app.models import Enregistrement
+from sabil.models import Enregistrement
 
 class Command(BaseCommand):
     help = 'Supprime les enregistrements vidéo de plus de 7 jours (soft delete)'
