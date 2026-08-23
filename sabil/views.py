@@ -18,7 +18,7 @@ from .models import *
 from .serializers import *
 from rest_framework_simplejwt.tokens import RefreshToken
 logger = logging.getLogger(__name__)
-from livekit import api,webhook  # ← Nouveau package LiveKit
+from livekit import api  # ← Nouveau package LiveKit
 # Clés API LiveKit (à mettre dans settings.py ou .env)
 LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY', 'APImyschool2026')
 LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET', 'secretmyschool2026xK9mP3qR7vL2nW8')
@@ -64,12 +64,12 @@ import random
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from livekit.api import TokenVerifier, WebhookReceiver
-
+from sabil.authentication import LiveKitWebhookAuthentication
 from rest_framework.permissions import AllowAny
 
 # ... (tes constantes LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
 
-webhook_receiver = webhook.WebhookReceiver(LIVEKIT_API_SECRET)
+
 
 
 # ──────────────────────────────────────────────────────────────
@@ -150,44 +150,41 @@ def toggle_recording(request, classe_id):
 
 
 
+
 # ──────────────────────────────────────────────────────────────
 # 2. WEBHOOK LIVEKIT (Reçoit la fin de l'enregistrement)
 # ──────────────────────────────────────────────────────────────
-@csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])  # AllowAny est sécurisé ici car on vérifie la signature JWT manuellement juste après
+@authentication_classes([LiveKitWebhookAuthentication]) # 🔐 Vérifie la signature JWT LiveKit
+@permission_classes([AllowAny])                         # Autorise l'accès car l'auth est déjà gérée
+@csrf_exempt                                            # Sécurité supplémentaire pour les webhooks externes
 def livekit_webhook(request):
+    """
+    Reçoit les événements Webhook de LiveKit.
+    Grâce à LiveKitWebhookAuthentication, si le code arrive ici, 
+    la signature JWT est déjà vérifiée et valide.
+    """
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
     try:
-        # 🔐 1. VÉRIFICATION DE LA SIGNATURE JWT (Sécurité obligatoire)
-        auth_header = request.headers.get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
-            return JsonResponse({'error': 'Missing auth header'}, status=401)
-        
-        token = auth_header.split(' ')[1]
-        
-        try:
-            # Cette méthode du SDK vérifie la signature ET parse le JSON en objet WebhookEvent
-            event = webhook_receiver.receive(token, request.body)
-        except Exception as e:
-            print(f"❌ Signature webhook invalide ou erreur de parsing: {e}")
-            return JsonResponse({'error': 'Invalid signature or payload'}, status=401)
+        # On utilise request.body et json.loads car c'est plus fiable pour les webhooks bruts
+        payload = json.loads(request.body)
+        event = payload.get('event')
 
-        # 🔐 2. On ne s'intéresse qu'à la fin de l'enregistrement
-        if event.event == 'egress_ended':
-            egress_info = event.egress
-            egress_id = egress_info.egress_id
+        # On ne s'intéresse qu'à la fin de l'enregistrement
+        if event == 'egress_ended':
+            egress_info = payload.get('egress', {})
+            egress_id = egress_info.get('egress_id')
             
             # Récupérer le nom du fichier (peut être dans file.filename ou filepath)
-            file_info = egress_info.file
-            filename = file_info.filename if file_info else (egress_info.filepath.split('/')[-1] if egress_info.filepath else '')
+            file_info = egress_info.get('file', {})
+            filename = file_info.get('filename') or (egress_info.get('filepath', '').split('/')[-1] if egress_info.get('filepath') else '')
             
             # Durée réelle calculée par LiveKit (en secondes)
-            duree = egress_info.duration or None
-            
-            # 3. Retrouver l'enregistrement dans notre BDD
+            duree = egress_info.get('duration')
+
+            # 1. Retrouver l'enregistrement dans notre BDD
             try:
                 enregistrement = Enregistrement.objects.get(
                     egress_id=egress_id,
@@ -197,12 +194,12 @@ def livekit_webhook(request):
                 # Si on ne trouve pas, on ignore (peut-être déjà traité ou supprimé)
                 return JsonResponse({'status': 'ignored'}, status=200)
 
-            # 4. Construire l'URL publique du fichier
-            # ⚠️ ADAPTE "https://live.sabil-al-ilm.org/recordings/" selon ta config Nginx/Caddy réelle
-            file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video
+            # 2. Construire l'URL publique du fichier
+            # ⚠️ ADAPTE "https://live.sabil-al-ilm.org/recordings/" selon ta config Caddy/Nginx réelle
+            file_name_only = filename if filename else enregistrement.url_video.split('/')[-1]
             public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
 
-            # 5. Mettre à jour l'enregistrement en base de données
+            # 3. Mettre à jour l'enregistrement en base de données
             enregistrement.url_video = public_url
             enregistrement.statut = 'termine'
             enregistrement.ended_at = timezone.now()
@@ -210,7 +207,7 @@ def livekit_webhook(request):
                 enregistrement.duree_secondes = int(duree)
             enregistrement.save()
 
-            # 6. Créer le message dans le chat de la classe
+            # 4. Créer le message dans le chat de la classe
             expediteur = (
                 enregistrement.demarre_par or 
                 enregistrement.classe.professeur or 
@@ -238,9 +235,12 @@ def livekit_webhook(request):
 
             return JsonResponse({'status': 'success', 'message_created': True}, status=200)
         
-        # Pour les autres événements LiveKit, on répond juste 200 OK
+        # Pour les autres événements LiveKit (ex: participant_joined), on répond 200 OK
+        # pour que LiveKit arrête de faire des tentatives (retries).
         return JsonResponse({'status': 'ignored'}, status=200)
 
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
     except Exception as e:
         print(f"❌ Erreur Webhook LiveKit: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
