@@ -60,6 +60,138 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.core.mail import send_mail
 from rest_framework.throttling import AnonRateThrottle
 import random
+
+from rest_framework.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+
+# ──────────────────────────────────────────────────────────────
+# 1. VUE POUR DÉMARRER / ARRÊTER L'ENREGISTREMENT
+# ──────────────────────────────────────────────────────────────
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_recording(request, classe_id):
+    try:
+        # 1. Récupérer la classe (vérifie qu'elle existe)
+        classe = get_object_or_404(Classes, id=classe_id)
+        
+        # 2. Initialiser le client LiveKit Egress
+        client = api.EgressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+        
+        # 3. Déterminer le nom de la room 
+        # ⚠️ ADAPTE CETTE LIGNE si ton frontend génère le roomName différemment 
+        room_name = f"classe_{classe_id}" 
+        
+        # 4. Vérifier s'il y a déjà un enregistrement en cours pour cette room
+        egresses = client.list_egress(room_name=room_name)
+        active_egress = next((e for e in egresses if e.status == api.EgressStatus.EGRESS_ACTIVE), None)
+
+        if active_egress:
+            # 5. SCÉNARIO A : Un enregistrement est en cours → ON L'ARRÊTE
+            client.stop_egress(active_egress.egress_id)
+            
+            return Response({
+                "status": "stopped", 
+                "message": "Enregistrement arrêté avec succès. La vidéo sera disponible sous peu."
+            })
+            
+        else:
+            # 6. SCÉNARIO B : Aucun enregistrement → ON EN DÉMARRE UN NOUVEAU
+            timestamp = int(time.time())
+            filename = f"seance_{classe_id}_{timestamp}.mp4"
+            
+            # Configuration de la sortie fichier (MP4)
+            req = api.RoomCompositeEgressRequest(
+                room_name=room_name,
+                file_outputs=[api.EncodedFileOutput(
+                    file_type=api.EncodedFileType.MP4,
+                    filepath=filename,
+                )]
+            )
+            
+            # Lancement de l'enregistrement via l'API LiveKit
+            info = client.start_room_composite_egress(req)
+            
+            # 7. Sauvegarder la trace dans la base de données Django
+            # On récupère la séance la plus récente de cette classe (via created_at pour éviter les nulls de date_seance)
+            derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
+            
+            Enregistrement.objects.create(
+                classe=classe,
+                seance=derniere_seance,
+                egress_id=info.egress_id,
+                fichier_url=filename, # Le Webhook mettra à jour cette URL avec le chemin public plus tard
+            )
+            
+            return Response({
+                "status": "started", 
+                "egress_id": info.egress_id, 
+                "message": "Enregistrement démarré avec succès."
+            })
+            
+    except Exception as e:
+        print(f"❌ Erreur LiveKit Egress (classe {classe_id}): {str(e)}")
+        return Response({
+            "error": "Impossible de gérer l'enregistrement.",
+            "details": str(e)
+        }, status=500)
+
+
+# ──────────────────────────────────────────────────────────────
+# 2. WEBHOOK POUR RECEVOIR LA FIN DE L'ENREGISTREMENT
+# ──────────────────────────────────────────────────────────────
+@csrf_exempt # LiveKit ne peut pas fournir de token CSRF
+def livekit_webhook(request):
+    if request.method != 'POST':
+        return Response({'error': 'Method not allowed'}, status=405)
+
+    try:
+        payload = json.loads(request.body)
+        event = payload.get('event')
+        
+        # On ne s'intéresse qu'à la fin de l'enregistrement
+        if event == 'egress_ended':
+            egress_info = payload.get('egress', {})
+            egress_id = egress_info.get('egress_id')
+            file_info = egress_info.get('file', {})
+            filename = file_info.get('filename') # ou 'filepath' selon ta config LiveKit
+            
+            # 1. Retrouver l'enregistrement dans notre BDD
+            try:
+                enregistrement = Enregistrement.objects.get(egress_id=egress_id)
+            except Enregistrement.DoesNotExist:
+                return Response({'status': 'ignored'}, status=200)
+
+            # 2. Construire l'URL publique du fichier 
+            # ⚠️ ADAPTE "https://live.sabil-al-ilm.org/recordings/" selon ta config Nginx/Caddy
+            file_name_only = filename.split('/')[-1] if filename else enregistrement.fichier_url
+            public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
+
+            # 3. Créer le message dans le chat de la classe
+            # On utilise le professeur de la classe comme expéditeur, ou un user système par défaut
+            expediteur = enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
+            
+            Message.objects.create(
+                classe=enregistrement.classe,
+                expediteur=expediteur,
+                contenu=f"🎥 **Enregistrement du cours disponible**\nClasse : *{enregistrement.classe.nom}*\n\nLa vidéo est prête. Cliquez sur le fichier ci-joint pour la télécharger ou la regarder.",
+                type_message='video',
+                fichier_url=public_url,
+                nom_fichier=f"Replay_{enregistrement.classe.nom}.mp4"
+            )
+            
+            # 4. Mettre à jour l'enregistrement avec l'URL finale publique
+            enregistrement.fichier_url = public_url
+            enregistrement.save()
+
+            return Response({'status': 'success', 'message_created': True}, status=200)
+            
+        return Response({'status': 'ignored'}, status=200)
+
+    except Exception as e:
+        print(f"❌ Erreur Webhook LiveKit: {str(e)}")
+        return Response({'error': str(e)}, status=500)
+
+
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
 # ─────────────────────────────────────────────
