@@ -108,7 +108,7 @@ def toggle_recording(request, classe_id):
             })
         else:
             # 3. SCÉNARIO B : Aucun enregistrement → ON EN DÉMARRE UN NOUVEAU
-            timestamp = int(time.time())
+            timestamp = int(datetime.now().timestamp())
             filename = f"seance_{classe_id}_{timestamp}.mp4"
             
             req = api.RoomCompositeEgressRequest(
