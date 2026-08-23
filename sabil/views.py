@@ -30,7 +30,7 @@ from django.db.models.functions import TruncDate, Cast
 
 from django.db.models import Exists, OuterRef, Sum, F, Case, When, Value, IntegerField, FloatField,Count, F, Q,Prefetch, DecimalField
 import mimetypes
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.core.files.storage import default_storage
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
