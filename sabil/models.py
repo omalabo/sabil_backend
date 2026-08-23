@@ -42,6 +42,55 @@ class AbsencesProfs(models.Model):
         db_table_comment = 'Alimenté automatiquement par les réponses élèves (question entrée) et par les admins. Utilisé pour le tableau mensuel direction.'
 
 
+
+class Enregistrement(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    classe = models.ForeignKey(
+        'Classes', 
+        models.CASCADE, 
+        related_name='enregistrements'
+    )
+    seance = models.ForeignKey(
+        'Seances', 
+        models.SET_NULL, 
+        null=True, blank=True,
+        related_name='enregistrements'
+    )
+    demarre_par = models.ForeignKey(
+        'Users', 
+        models.SET_NULL, 
+        null=True,
+        related_name='enregistrements_demarres'
+    )
+    egress_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    url_video = models.TextField(null=True, blank=True)
+    duree_secondes = models.IntegerField(null=True, blank=True)
+    taille_bytes = models.BigIntegerField(null=True, blank=True)
+    
+    STATUT_CHOICES = [
+        ('en_cours', 'En cours'),
+        ('termine', 'Terminé'),
+        ('echoue', 'Échoué'),
+        ('supprime', 'Supprimé'),
+    ]
+    statut = models.CharField(
+        max_length=20, 
+        choices=STATUT_CHOICES, 
+        default='en_cours'
+    )
+    
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'enregistrements'
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"Enregistrement {self.classe.nom} - {self.started_at.strftime('%Y-%m-%d %H:%M')}"
+        
 class AnnoncesGroupe(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     titre= models.CharField(max_length=200, blank=True, null=True)
