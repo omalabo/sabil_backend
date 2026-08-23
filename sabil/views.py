@@ -72,45 +72,33 @@ from rest_framework.permissions import AllowAny
 
 
 
-# ──────────────────────────────────────────────────────────────
-# 1. VUE POUR DÉMARRER / ARRÊTER L'ENREGISTREMENT
-# ──────────────────────────────────────────────────────────────
+import asyncio
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_recording(request, classe_id):
-    try:
-        classe = get_object_or_404(Classes, id=classe_id)
-        client = api.EgressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-        
-        # Le nom de la room doit correspondre exactement à celui envoyé par le frontend
-        room_name = f"classe_{classe_id}" 
-        
-        # 1. Vérifier s'il y a déjà un enregistrement en cours pour cette room
-        egresses = client.list_egress(room_name=room_name)
-        active_egress = next((e for e in egresses if e.status == api.EgressStatus.EGRESS_ACTIVE), None)
+    classe = get_object_or_404(Classes, id=classe_id)
+    room_name = f"classe_{classe_id}"
 
-        if active_egress:
-            # 2. SCÉNARIO A : Un enregistrement est en cours → ON L'ARRÊTE
-            client.stop_egress(active_egress.egress_id)
-            
-            # Mettre à jour la BDD
-            Enregistrement.objects.filter(
-                egress_id=active_egress.egress_id,
-                deleted_at__isnull=True
-            ).update(
-                statut='termine',
-                ended_at=timezone.now()
+    async def _run():
+        lkapi = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+        try:
+            res = await lkapi.egress.list_egress(
+                api.ListEgressRequest(room_name=room_name)
             )
-            
-            return Response({
-                "status": "stopped", 
-                "message": "Enregistrement arrêté. La vidéo sera disponible sous peu."
-            })
-        else:
-            # 3. SCÉNARIO B : Aucun enregistrement → ON EN DÉMARRE UN NOUVEAU
+            active_egress = next(
+                (e for e in res.items if e.status == api.EgressStatus.EGRESS_ACTIVE),
+                None
+            )
+
+            if active_egress:
+                await lkapi.egress.stop_egress(
+                    api.StopEgressRequest(egress_id=active_egress.egress_id)
+                )
+                return {"action": "stopped", "egress_id": active_egress.egress_id}
+
             timestamp = int(datetime.now().timestamp())
             filename = f"seance_{classe_id}_{timestamp}.mp4"
-            
             req = api.RoomCompositeEgressRequest(
                 room_name=room_name,
                 file_outputs=[api.EncodedFileOutput(
@@ -118,35 +106,33 @@ def toggle_recording(request, classe_id):
                     filepath=filename,
                 )]
             )
-            
-            info = client.start_room_composite_egress(req)
-            
-            # Récupérer la séance la plus récente de cette classe (fallback si besoin)
-            derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-            
-            # Créer la trace dans la BDD
-            Enregistrement.objects.create(
-                classe=classe,
-                seance=derniere_seance,
-                demarre_par=request.user,
-                egress_id=info.egress_id,
-                url_video=filename, # Sera écrasé par l'URL publique lors du webhook
-                statut='en_cours'
-            )
-            
-            return Response({
-                "status": "started", 
-                "egress_id": info.egress_id, 
-                "message": "Enregistrement démarré avec succès."
-            })
-            
+            info = await lkapi.egress.start_room_composite_egress(req)
+            return {"action": "started", "egress_id": info.egress_id, "filename": filename}
+        finally:
+            await lkapi.aclose()
+
+    try:
+        result = asyncio.run(_run())
     except Exception as e:
         print(f"❌ Erreur LiveKit Egress (classe {classe_id}): {str(e)}")
-        return Response({
-            "error": "Impossible de gérer l'enregistrement.",
-            "details": str(e)
-        }, status=500)
+        return Response({"error": "Impossible de gérer l'enregistrement.", "details": str(e)}, status=500)
 
+    if result["action"] == "stopped":
+        Enregistrement.objects.filter(
+            egress_id=result["egress_id"], deleted_at__isnull=True
+        ).update(statut='termine', ended_at=timezone.now())
+        return Response({"status": "stopped", "message": "Enregistrement arrêté. La vidéo sera disponible sous peu."})
+    else:
+        derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
+        Enregistrement.objects.create(
+            classe=classe,
+            seance=derniere_seance,
+            demarre_par=request.user,
+            egress_id=result["egress_id"],
+            url_video=result["filename"],
+            statut='en_cours'
+        )
+        return Response({"status": "started", "egress_id": result["egress_id"], "message": "Enregistrement démarré avec succès."})
 
 
 
