@@ -78,7 +78,11 @@ import asyncio
 @permission_classes([IsAuthenticated])
 def toggle_recording(request, classe_id):
     classe = get_object_or_404(Classes, id=classe_id)
-    room_name = f"classe_{classe_id}"
+    derniere_presence = Presences.objects.filter(classe=classe).order_by('-heure_connexion').first()
+    room_name = derniere_presence.jitsi_room_id if derniere_presence else None
+
+    if not room_name:
+        return Response({"error": "Aucune session active trouvée pour cette classe."}, status=400)
 
     async def _run():
         lkapi = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
