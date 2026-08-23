@@ -1,7 +1,24 @@
 # authentication.py (sabil/authentication.py)
+import jwt
+from django.conf import settings
+
+# ─────────────────────────────────────────────
+# IMPORTS REST FRAMEWORK
+# ─────────────────────────────────────────────
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.exceptions import AuthenticationFailed
+
+# ─────────────────────────────────────────────
+# IMPORTS SIMPLEJWT (pour tes utilisateurs Django)
+# ─────────────────────────────────────────────
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
+from rest_framework_simplejwt.exceptions import InvalidToken
+
+# ─────────────────────────────────────────────
+# IMPORTS MODÈLES
+# ─────────────────────────────────────────────
 from .models import Users
+
 
 
 class CustomJWTAuthentication(JWTAuthentication):
@@ -55,3 +72,43 @@ class CustomJWTAuthentication(JWTAuthentication):
             return Users.objects.get(id=user_id)
         except Users.DoesNotExist:
             raise AuthenticationFailed('Utilisateur introuvable', code='user_not_found')
+
+
+class LiveKitWebhookAuthentication(BaseAuthentication):
+    """
+    Authentifie uniquement les requêtes webhook provenant de LiveKit.
+    Vérifie la signature JWT du token fourni par LiveKit avec l'API_SECRET.
+    """
+    def authenticate(self, request):
+        # 1. Récupérer l'en-tête Authorization
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        
+        if not auth_header or not auth_header.startswith('Bearer '):
+            # Pas de token : on retourne None, DRF gérera l'erreur 401/403 selon les permissions
+            return None 
+
+        token = auth_header.split(' ')[1]
+
+        # Récupère le secret depuis les settings Django (ou utilise la valeur en dur en fallback)
+        secret = getattr(settings, 'LIVEKIT_API_SECRET', 'secretmyschool2026xK9mP3qR7vL2nW8')
+
+        try:
+            # 2. Décoder et vérifier la signature avec l'API Secret de LiveKit
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=['HS256'] # LiveKit utilise HS256 par défaut
+            )
+            
+            # 3. Vérification de sécurité : s'assurer que c'est bien un payload de webhook LiveKit
+            if 'event' not in payload:
+                raise AuthenticationFailed('Payload invalide : ce n\'est pas un webhook LiveKit.')
+
+            # 4. Authentification réussie. 
+            # On retourne (None, payload) car il n'y a pas d'objet "User" Django associé à ce webhook.
+            return (None, payload)
+
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Le token du webhook LiveKit a expiré.')
+        except jwt.InvalidTokenError:
+            raise AuthenticationFailed('Signature du webhook LiveKit invalide.')
