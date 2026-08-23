@@ -64,42 +64,47 @@ import random
 from rest_framework.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 
+
 # ──────────────────────────────────────────────────────────────
-# 1. VUE POUR DÉMARRER / ARRÊTER L'ENREGISTREMENT
+# 1. DÉMARRER / ARRÊTER L'ENREGISTREMENT
 # ──────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def toggle_recording(request, classe_id):
     try:
-        # 1. Récupérer la classe (vérifie qu'elle existe)
         classe = get_object_or_404(Classes, id=classe_id)
-        
-        # 2. Initialiser le client LiveKit Egress
         client = api.EgressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+        room_name = f"classe_{classe_id}"
         
-        # 3. Déterminer le nom de la room 
-        # ⚠️ ADAPTE CETTE LIGNE si ton frontend génère le roomName différemment 
-        room_name = f"classe_{classe_id}" 
-        
-        # 4. Vérifier s'il y a déjà un enregistrement en cours pour cette room
+        # Vérifier s'il y a déjà un enregistrement en cours
         egresses = client.list_egress(room_name=room_name)
-        active_egress = next((e for e in egresses if e.status == api.EgressStatus.EGRESS_ACTIVE), None)
+        active_egress = next(
+            (e for e in egresses if e.status == api.EgressStatus.EGRESS_ACTIVE), 
+            None
+        )
 
         if active_egress:
-            # 5. SCÉNARIO A : Un enregistrement est en cours → ON L'ARRÊTE
+            # SCÉNARIO A : Arrêter l'enregistrement en cours
             client.stop_egress(active_egress.egress_id)
             
-            return Response({
-                "status": "stopped", 
-                "message": "Enregistrement arrêté avec succès. La vidéo sera disponible sous peu."
-            })
+            # Mettre à jour la BDD : marquer comme terminé
+            Enregistrement.objects.filter(
+                egress_id=active_egress.egress_id,
+                deleted_at__isnull=True
+            ).update(
+                statut='termine',
+                ended_at=timezone.now()
+            )
             
+            return Response({
+                "status": "stopped",
+                "message": "Enregistrement arrêté. La vidéo sera disponible sous peu."
+            })
         else:
-            # 6. SCÉNARIO B : Aucun enregistrement → ON EN DÉMARRE UN NOUVEAU
+            # SCÉNARIO B : Démarrer un nouvel enregistrement
             timestamp = int(time.time())
             filename = f"seance_{classe_id}_{timestamp}.mp4"
             
-            # Configuration de la sortie fichier (MP4)
             req = api.RoomCompositeEgressRequest(
                 room_name=room_name,
                 file_outputs=[api.EncodedFileOutput(
@@ -108,23 +113,24 @@ def toggle_recording(request, classe_id):
                 )]
             )
             
-            # Lancement de l'enregistrement via l'API LiveKit
             info = client.start_room_composite_egress(req)
             
-            # 7. Sauvegarder la trace dans la base de données Django
-            # On récupère la séance la plus récente de cette classe (via created_at pour éviter les nulls de date_seance)
+            # Récupérer la séance la plus récente
             derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
             
+            # Créer l'enregistrement dans la BDD
             Enregistrement.objects.create(
                 classe=classe,
                 seance=derniere_seance,
+                demarre_par=request.user,
                 egress_id=info.egress_id,
-                fichier_url=filename, # Le Webhook mettra à jour cette URL avec le chemin public plus tard
+                url_video=filename,  # Sera mis à jour par le webhook
+                statut='en_cours'
             )
             
             return Response({
-                "status": "started", 
-                "egress_id": info.egress_id, 
+                "status": "started",
+                "egress_id": info.egress_id,
                 "message": "Enregistrement démarré avec succès."
             })
             
@@ -137,9 +143,9 @@ def toggle_recording(request, classe_id):
 
 
 # ──────────────────────────────────────────────────────────────
-# 2. WEBHOOK POUR RECEVOIR LA FIN DE L'ENREGISTREMENT
+# 2. WEBHOOK LIVEKIT (fin d'enregistrement)
 # ──────────────────────────────────────────────────────────────
-@csrf_exempt # LiveKit ne peut pas fournir de token CSRF
+@csrf_exempt
 def livekit_webhook(request):
     if request.method != 'POST':
         return Response({'error': 'Method not allowed'}, status=405)
@@ -148,40 +154,57 @@ def livekit_webhook(request):
         payload = json.loads(request.body)
         event = payload.get('event')
         
-        # On ne s'intéresse qu'à la fin de l'enregistrement
         if event == 'egress_ended':
             egress_info = payload.get('egress', {})
             egress_id = egress_info.get('egress_id')
             file_info = egress_info.get('file', {})
-            filename = file_info.get('filename') # ou 'filepath' selon ta config LiveKit
+            filename = file_info.get('filename')
             
-            # 1. Retrouver l'enregistrement dans notre BDD
+            # Durée réelle calculée par LiveKit (en secondes)
+            duree = egress_info.get('duration') or None
+            
+            # 1. Retrouver l'enregistrement
             try:
-                enregistrement = Enregistrement.objects.get(egress_id=egress_id)
+                enregistrement = Enregistrement.objects.get(
+                    egress_id=egress_id,
+                    deleted_at__isnull=True
+                )
             except Enregistrement.DoesNotExist:
                 return Response({'status': 'ignored'}, status=200)
 
-            # 2. Construire l'URL publique du fichier 
-            # ⚠️ ADAPTE "https://live.sabil-al-ilm.org/recordings/" selon ta config Nginx/Caddy
-            file_name_only = filename.split('/')[-1] if filename else enregistrement.fichier_url
+            # 2. Construire l'URL publique
+            file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video
             public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
 
-            # 3. Créer le message dans le chat de la classe
-            # On utilise le professeur de la classe comme expéditeur, ou un user système par défaut
-            expediteur = enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
+            # 3. Mettre à jour l'enregistrement
+            enregistrement.url_video = public_url
+            enregistrement.statut = 'termine'
+            enregistrement.ended_at = timezone.now()
+            if duree:
+                enregistrement.duree_secondes = int(duree)
+            enregistrement.save()
+
+            # 4. Créer le message dans le chat de la classe
+            expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
+            
+            duree_txt = ""
+            if enregistrement.duree_secondes:
+                minutes = enregistrement.duree_secondes // 60
+                duree_txt = f"\n⏱ Durée : {minutes} minute{'s' if minutes > 1 else ''}"
             
             Message.objects.create(
                 classe=enregistrement.classe,
                 expediteur=expediteur,
-                contenu=f"🎥 **Enregistrement du cours disponible**\nClasse : *{enregistrement.classe.nom}*\n\nLa vidéo est prête. Cliquez sur le fichier ci-joint pour la télécharger ou la regarder.",
+                contenu=(
+                    f"🎥 **Enregistrement du cours disponible**\n"
+                    f"📚 Classe : *{enregistrement.classe.nom}*{duree_txt}\n\n"
+                    f"La vidéo est prête. Cliquez sur le fichier ci-joint pour la télécharger ou la regarder.\n"
+                    f"⚠️ *Disponible pendant 7 jours.*"
+                ),
                 type_message='video',
                 fichier_url=public_url,
                 nom_fichier=f"Replay_{enregistrement.classe.nom}.mp4"
             )
-            
-            # 4. Mettre à jour l'enregistrement avec l'URL finale publique
-            enregistrement.fichier_url = public_url
-            enregistrement.save()
 
             return Response({'status': 'success', 'message_created': True}, status=200)
             
