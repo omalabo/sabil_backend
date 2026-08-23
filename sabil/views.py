@@ -63,6 +63,10 @@ import random
 
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
+from livekit.api import WebhookReceiver
+
+# Initialisation du vérificateur de webhook (une seule fois au chargement du module)
+webhook_receiver = WebhookReceiver(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -74,21 +78,20 @@ def toggle_recording(request, classe_id):
     try:
         classe = get_object_or_404(Classes, id=classe_id)
         client = api.EgressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-        room_name = f"classe_{classe_id}"
-
-        # Vérifier s'il y a déjà un enregistrement en cours
+        
+        # Le nom de la room doit correspondre exactement à celui envoyé par le frontend
+        room_name = f"classe_{classe_id}" 
+        
+        # 1. Vérifier s'il y a déjà un enregistrement en cours pour cette room
         egresses = client.list_egress(room_name=room_name)
-        active_egress = next(
-            (e for e in egresses if e.status == api.EgressStatus.EGRESS_ACTIVE),
-            None
-        )
+        active_egress = next((e for e in egresses if e.status == api.EgressStatus.EGRESS_ACTIVE), None)
 
         if active_egress:
-            # SCÉNARIO A : ARRÊTER l'enregistrement
+            # 2. SCÉNARIO A : Un enregistrement est en cours → ON L'ARRÊTE
             client.stop_egress(active_egress.egress_id)
             
             # Mettre à jour la BDD
-            Enregistrements.objects.filter(
+            Enregistrement.objects.filter(
                 egress_id=active_egress.egress_id,
                 deleted_at__isnull=True
             ).update(
@@ -97,14 +100,14 @@ def toggle_recording(request, classe_id):
             )
             
             return Response({
-                "status": "stopped",
+                "status": "stopped", 
                 "message": "Enregistrement arrêté. La vidéo sera disponible sous peu."
             })
         else:
-            # SCÉNARIO B : DÉMARRER un nouvel enregistrement
+            # 3. SCÉNARIO B : Aucun enregistrement → ON EN DÉMARRE UN NOUVEAU
             timestamp = int(time.time())
             filename = f"seance_{classe_id}_{timestamp}.mp4"
-
+            
             req = api.RoomCompositeEgressRequest(
                 room_name=room_name,
                 file_outputs=[api.EncodedFileOutput(
@@ -112,30 +115,28 @@ def toggle_recording(request, classe_id):
                     filepath=filename,
                 )]
             )
-
+            
             info = client.start_room_composite_egress(req)
-
-            # Récupérer la séance la plus récente
+            
+            # Récupérer la séance la plus récente de cette classe (fallback si besoin)
             derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-
-            # Créer l'enregistrement dans la BDD
-            Enregistrements.objects.create(
-                id=info.egress_id[:36] if len(info.egress_id) >= 36 else info.egress_id,  # UUID valide
+            
+            # Créer la trace dans la BDD
+            Enregistrement.objects.create(
                 classe=classe,
                 seance=derniere_seance,
-                demarre_par=request.user,  # ← Utilise le champ existant
-                egress_id=info.egress_id,  # ← NOUVEAU
-                url_video=filename,
-                statut='en_cours',
-                started_at=timezone.now()
+                demarre_par=request.user,
+                egress_id=info.egress_id,
+                url_video=filename, # Sera écrasé par l'URL publique lors du webhook
+                statut='en_cours'
             )
-
+            
             return Response({
-                "status": "started",
-                "egress_id": info.egress_id,
+                "status": "started", 
+                "egress_id": info.egress_id, 
                 "message": "Enregistrement démarré avec succès."
             })
-
+            
     except Exception as e:
         print(f"❌ Erreur LiveKit Egress (classe {classe_id}): {str(e)}")
         return Response({
@@ -145,54 +146,76 @@ def toggle_recording(request, classe_id):
 
 
 # ──────────────────────────────────────────────────────────────
-# 2. WEBHOOK LIVEKIT (fin d'enregistrement)
+# 2. WEBHOOK LIVEKIT (Reçoit la fin de l'enregistrement)
 # ──────────────────────────────────────────────────────────────
-@csrf_exempt
+@csrf_exempt # LiveKit ne peut pas fournir de token CSRF Django
 def livekit_webhook(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
     try:
-        payload = json.loads(request.body)
-        event = payload.get('event')
+        # 🔐 1. VÉRIFICATION DE LA SIGNATURE JWT (Sécurité obligatoire)
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return JsonResponse({'error': 'Missing auth header'}, status=401)
+        
+        token = auth_header.split(' ')[1]
+        
+        try:
+            # Cette méthode vérifie la signature ET parse le JSON en objet WebhookEvent
+            event = webhook_receiver.receive(token, request.body)
+        except Exception as e:
+            print(f"❌ Signature webhook invalide ou erreur de parsing: {e}")
+            return JsonResponse({'error': 'Invalid signature or payload'}, status=401)
 
-        if event == 'egress_ended':
-            egress_info = payload.get('egress', {})
-            egress_id = egress_info.get('egress_id')
-            file_info = egress_info.get('file', {})
-            filename = file_info.get('filename')
-            duree = egress_info.get('duration') or None
-
-            # 1. Retrouver l'enregistrement
+        # 🔐 2. On ne s'intéresse qu'à la fin de l'enregistrement
+        if event.event == 'egress_ended':
+            egress_info = event.egress
+            egress_id = egress_info.egress_id
+            
+            # Récupérer le nom du fichier (peut être dans file.filename ou filepath)
+            file_info = egress_info.file
+            filename = file_info.filename if file_info else (egress_info.filepath.split('/')[-1] if egress_info.filepath else '')
+            
+            # Durée réelle calculée par LiveKit (en secondes)
+            duree = egress_info.duration or None
+            
+            # 3. Retrouver l'enregistrement dans notre BDD
             try:
-                enregistrement = Enregistrements.objects.get(
+                enregistrement = Enregistrement.objects.get(
                     egress_id=egress_id,
                     deleted_at__isnull=True
                 )
-            except Enregistrements.DoesNotExist:
+            except Enregistrement.DoesNotExist:
+                # Si on ne trouve pas, on ignore (peut-être déjà traité ou supprimé)
                 return JsonResponse({'status': 'ignored'}, status=200)
 
-            # 2. Construire l'URL publique
+            # 4. Construire l'URL publique du fichier
+            # ⚠️ ADAPTE "https://live.sabil-al-ilm.org/recordings/" selon ta config Nginx/Caddy réelle
             file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video
             public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
 
-            # 3. Mettre à jour l'enregistrement
+            # 5. Mettre à jour l'enregistrement en base de données
             enregistrement.url_video = public_url
-            enregistrement.statut = 'disponible'  # ← Utilise 'disponible' (ton enum)
+            enregistrement.statut = 'termine'
             enregistrement.ended_at = timezone.now()
             if duree:
                 enregistrement.duree_secondes = int(duree)
             enregistrement.save()
 
-            # 4. Créer le message dans le chat
-            expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
-
+            # 6. Créer le message dans le chat de la classe
+            expediteur = (
+                enregistrement.demarre_par or 
+                enregistrement.classe.professeur or 
+                Users.objects.filter(is_staff=True).first()
+            )
+            
             duree_txt = ""
             if enregistrement.duree_secondes:
                 minutes = enregistrement.duree_secondes // 60
                 duree_txt = f"\n⏱ Durée : {minutes} minute{'s' if minutes > 1 else ''}"
-
-            Messages.objects.create(
+            
+            Message.objects.create(
                 classe=enregistrement.classe,
                 expediteur=expediteur,
                 contenu=(
@@ -207,13 +230,13 @@ def livekit_webhook(request):
             )
 
             return JsonResponse({'status': 'success', 'message_created': True}, status=200)
-
+        
+        # Pour les autres événements LiveKit, on répond juste 200 OK
         return JsonResponse({'status': 'ignored'}, status=200)
 
     except Exception as e:
         print(f"❌ Erreur Webhook LiveKit: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
-
 
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
