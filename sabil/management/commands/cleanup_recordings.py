@@ -1,7 +1,8 @@
 from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from sabil.models import Enregistrement
+from sabil.models import Enregistrements  # ⚠️ Adapte le nom de ton app
+
 
 class Command(BaseCommand):
     help = 'Supprime les enregistrements vidéo de plus de 7 jours (soft delete)'
@@ -9,8 +10,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         limit_date = timezone.now() - timedelta(days=7)
         
-        # Soft delete : on marque deleted_at au lieu de supprimer
-        old_recordings = Enregistrement.objects.filter(
+        old_recordings = Enregistrements.objects.filter(
             started_at__lt=limit_date,
             deleted_at__isnull=True
         )
@@ -18,16 +18,13 @@ class Command(BaseCommand):
         count = 0
         for rec in old_recordings:
             rec.deleted_at = timezone.now()
-            rec.statut = 'supprime'
+            rec.statut = 'supprime'  # ← Ton enum existant
             rec.save()
             count += 1
             self.stdout.write(self.style.SUCCESS(
-                f'Soft delete : {rec.id} - {rec.classe.nom}'
+                f'Soft delete : {rec.id} - classe {rec.classe_id}'
             ))
 
         self.stdout.write(self.style.SUCCESS(
             f'Nettoyage terminé : {count} enregistrement(s) marqué(s) comme supprimé.'
-        ))
-        self.stdout.write(self.style.WARNING(
-            'Note : La suppression physique des fichiers .mp4 se fait via le Cron Job système.'
         ))
