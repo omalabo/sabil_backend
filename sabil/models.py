@@ -240,7 +240,7 @@ class Enregistrements(models.Model):
     duree_secondes = models.IntegerField(blank=True, null=True)
     taille_bytes = models.BigIntegerField(blank=True, null=True)
     statut = models.TextField()
-    started_at = models.DateTimeField()
+    started_at = models.DateTimeField(auto_now_add=True)
     ended_at = models.DateTimeField(blank=True, null=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
 
