@@ -252,26 +252,32 @@ def livekit_webhook(request):
             return JsonResponse({'status': 'ok'}, status=200)
 
         # ═══ Un fichier (audio OU un des écrans) vient de se terminer ═══
-        # ═══ Un fichier (audio OU un des écrans) vient de se terminer ═══
         if event == 'egress_ended':
-            egress_info = payload.get('egress', {})
+            # 🔴 DEBUG : Affiche TOUT le payload reçu pour voir la structure exacte
+            print("🔴 DEBUG WEBHOOK PAYLOAD:", json.dumps(payload, indent=2))
+            
+            # LiveKit met parfois les infos dans 'egress', parfois à la racine
+            egress_info = payload.get('egress') or payload
+            
             egress_id = egress_info.get('egress_id')
             
-            # 🔴 CORRECTION : Lire le tableau "files" ou "file_results"
+            # Gérer à la fois "files" (tableau) et "file" (objet)
             files_list = egress_info.get('files') or egress_info.get('file_results') or []
             filename = ""
             duree = egress_info.get('duration')
             
             if files_list and len(files_list) > 0:
-                # Prendre le premier fichier de la liste
                 first_file = files_list[0]
                 filename = first_file.get('filename') or first_file.get('location') or ""
             else:
-                # Fallback au cas où ce serait un objet "file" unique
                 file_dict = egress_info.get('file', {})
                 filename = file_dict.get('filename') or file_dict.get('location') or ""
 
-            print(f"🎣 WEBHOOK egress_ended reçu ! egress_id: {egress_id}, filename brut: {filename}")
+            print(f"🎣 WEBHOOK egress_ended traité ! egress_id: {egress_id}, filename brut: {filename}")
+
+            if not egress_id:
+                print("⚠️ egress_id manquant dans le payload, impossible de lier à la BDD")
+                return JsonResponse({'status': 'ignored'}, status=200)
 
             try:
                 enregistrement = Enregistrements.objects.get(egress_id=egress_id, deleted_at__isnull=True)
@@ -309,7 +315,6 @@ def livekit_webhook(request):
                 nom_fichier = f"Ecran_{enregistrement.classe.nom}_{enregistrement.id}.mp4"
                 type_msg = 'video'
 
-            # 🔴 CRÉATION DU MESSAGE DANS LE CHAT
             Message.objects.create(
                 classe=enregistrement.classe,
                 expediteur=expediteur,
@@ -323,6 +328,7 @@ def livekit_webhook(request):
                 fichier_url=public_url,
                 nom_fichier=nom_fichier
             )
+            
             print(f"✅ MESSAGE CRÉÉ DANS LE CHAT pour la classe {enregistrement.classe.nom}")
             return JsonResponse({'status': 'success', 'message_created': True}, status=200)
          
