@@ -293,7 +293,7 @@ class Fichiers(models.Model):
     type_fichier = models.TextField()  # This field type is a guess.
     mime_type = models.CharField(max_length=100, blank=True, null=True)
     taille_bytes = models.BigIntegerField(blank=True, null=True)
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
     fichier_expires_at = models.DateTimeField(null=True, blank=True)
     is_voice_note = models.BooleanField(default=False)
 
