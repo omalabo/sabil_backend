@@ -323,7 +323,7 @@ def livekit_webhook(request):
                 fichier_url=public_url,
                 nom_fichier=nom_fichier
             )
-            
+            print(f"✅ MESSAGE CRÉÉ DANS LE CHAT pour la classe {enregistrement.classe.nom}")
             return JsonResponse({'status': 'success', 'message_created': True}, status=200)
          
         return JsonResponse({'status': 'ignored'}, status=200)
