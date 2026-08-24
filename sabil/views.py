@@ -114,7 +114,7 @@ def toggle_recording(request, classe_id):
                 audio_only=True,
                 file_outputs=[api.EncodedFileOutput(
                     file_type=api.EncodedFileType.OGG,
-                    filepath=filename,
+                    filepath=f"/recordings/{filename}",
                 )]
             )
             info_audio = await lkapi.egress.start_room_composite_egress(req_audio)
@@ -196,7 +196,7 @@ def livekit_webhook(request):
                                 req = api.TrackEgressRequest(
                                     room_name=room_name,
                                     track_id=track.get('sid'),
-                                    file=api.DirectFileOutput(filepath=filename)
+                                    file=api.DirectFileOutput(filepath=f"/recordings/{filename}")
                                 )
                                 info = await lkapi.egress.start_track_egress(req)
                                 return {"egress_id": info.egress_id, "filename": filename}
