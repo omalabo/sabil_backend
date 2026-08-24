@@ -425,7 +425,7 @@ class Messages(models.Model):
     fichier = models.ForeignKey(Fichiers, models.DO_NOTHING, blank=True, null=True)
     is_systeme = models.BooleanField()
     reply_to = models.ForeignKey('self', models.DO_NOTHING, db_column='reply_to', blank=True, null=True)
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
     recu_par = models.JSONField(default=list)   # liste d'user_ids qui ont reçu
     lu_par_ids = models.JSONField(default=list) # liste d'user_ids qui ont lu
