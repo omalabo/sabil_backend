@@ -303,8 +303,11 @@ def livekit_webhook(request):
             type_msg = 'audio' if est_audio else 'video'
             nom_fichier = f"Audio_{enregistrement.classe.nom}.ogg" if est_audio else f"Ecran_{enregistrement.classe.nom}.mp4"
             
+            # ✅ Correction : on définit le titre AVANT la f-string pour éviter le backslash dans les {}
+            titre = "🎵 Audio du cours disponible" if est_audio else "🖥️ Extrait d'écran partagé disponible"
+            
             contenu_message = (
-                f"{'🎵 Audio' if est_audio else '🖥️ Extrait d\'écran'} du cours disponible\n"
+                f"{titre}\n"
                 f"📚 Classe : *{enregistrement.classe.nom}*{duree_txt}\n\n"
                 f"Cliquez sur le fichier ci-joint pour l'écouter/regarder.\n"
                 f"⚠️ *Disponible pendant 7 jours.*"
