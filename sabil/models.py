@@ -284,7 +284,7 @@ class Factures(models.Model):
 
 
 class Fichiers(models.Model):
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     uploade_par = models.ForeignKey('Users', models.DO_NOTHING, db_column='uploade_par')
     classe = models.ForeignKey(Classes, models.DO_NOTHING, blank=True, null=True)
     nom_original = models.CharField(max_length=255)
@@ -395,7 +395,7 @@ class LogsActivite(models.Model):
 
 
 class Messages(models.Model):
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     expediteur = models.ForeignKey('Users', models.DO_NOTHING)
     classe = models.ForeignKey(Classes, models.DO_NOTHING)
     TYPE_CANAL_CHOICES = [
