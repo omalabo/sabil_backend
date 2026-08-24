@@ -62,6 +62,7 @@ from rest_framework.throttling import AnonRateThrottle
 import random
 
 from django.shortcuts import get_object_or_404
+from django.core.files.base import ContentFile
 from django.views.decorators.csrf import csrf_exempt
 from livekit.api import TokenVerifier, WebhookReceiver
 from sabil.authentication import LiveKitWebhookAuthentication
