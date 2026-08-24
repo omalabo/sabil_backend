@@ -211,7 +211,7 @@ class Diplomes(models.Model):
 
 
 class Enregistrements(models.Model):
-    id = models.UUIDField(primary_key=True)
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4)
     classe = models.ForeignKey(
         Classes, 
         models.DO_NOTHING,
