@@ -255,7 +255,7 @@ def livekit_webhook(request):
             return JsonResponse({'status': 'ok'}, status=200)
 
         # ═══════════════════════════════════════════════════════════
-        # 3. Un fichier (audio OU écran) vient de se terminer (CORRIGÉ POUR TON MODÈLE)
+        # 3. Un fichier (audio OU écran) vient de se terminer (CORRIGÉ)
         # ═══════════════════════════════════════════════════════════
         if event == 'egress_ended':
             egress_info = payload.get('egressInfo') or payload.get('egress') or payload
@@ -267,18 +267,14 @@ def livekit_webhook(request):
             
             files_list = egress_info.get('fileResults') or egress_info.get('file_results') or []
             filename = ""
-            
             if files_list and len(files_list) > 0:
-                first_file = files_list[0]
-                filename = first_file.get('filename') or first_file.get('location') or ""
+                filename = files_list[0].get('filename') or files_list[0].get('location') or ""
             else:
-                file_dict = egress_info.get('file', {})
-                filename = file_dict.get('filename') or file_dict.get('location') or ""
+                filename = egress_info.get('file', {}).get('filename') or egress_info.get('file', {}).get('location') or ""
 
             print(f"🎣 WEBHOOK egress_ended traité ! egress_id: {egress_id}, filename: {filename}, duree: {duree}s")
 
             if not egress_id:
-                print("⚠️ egress_id manquant dans le payload")
                 return JsonResponse({'status': 'ignored'}, status=200)
 
             try:
@@ -292,6 +288,7 @@ def livekit_webhook(request):
             
             print(f"🔗 URL publique générée : {public_url}")
 
+            # Mise à jour de l'enregistrement
             enregistrement.url_video = public_url
             enregistrement.statut = 'termine'
             enregistrement.ended_at = timezone.now()
@@ -300,61 +297,55 @@ def livekit_webhook(request):
             enregistrement.save()
 
             expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
-
-            duree_txt = ""
-            if enregistrement.duree_secondes:
-                minutes = enregistrement.duree_secondes // 60
-                duree_txt = f"\n⏱ Durée : {minutes} minute{'s' if minutes > 1 else ''}"
-
+            duree_txt = f"\n⏱ Durée : {enregistrement.duree_secondes // 60} min" if enregistrement.duree_secondes else ""
+            
             est_audio = file_name_only.startswith('audio_')
-            if est_audio:
-                titre = "🎵 Audio du cours disponible"
-                nom_fichier = f"Audio_{enregistrement.classe.nom}.ogg"
-                type_msg = 'audio'
-            else:
-                titre = "🖥️ Extrait d'écran partagé disponible"
-                nom_fichier = f"Ecran_{enregistrement.classe.nom}.mp4"
-                type_msg = 'video'
-
+            type_msg = 'audio' if est_audio else 'video'
+            nom_fichier = f"Audio_{enregistrement.classe.nom}.ogg" if est_audio else f"Ecran_{enregistrement.classe.nom}.mp4"
+            
             contenu_message = (
-                f"{titre}\n"
+                f"{'🎵 Audio' if est_audio else '🖥️ Extrait d\'écran'} du cours disponible\n"
                 f"📚 Classe : *{enregistrement.classe.nom}*{duree_txt}\n\n"
                 f"Cliquez sur le fichier ci-joint pour l'écouter/regarder.\n"
                 f"⚠️ *Disponible pendant 7 jours.*"
             )
 
-            # 🔴 CORRECTION MAJEURE : Création en 2 étapes à cause de la ForeignKey 'fichier'
             try:
-                # Étape A : Créer l'objet Fichier
-                # ⚠️ ADAPTE 'nom' et 'url' (ou 'fichier') SELON LES VRAIS CHAMPS DE TON MODÈLE Fichiers
+                # ÉTAPE A : Créer l'objet Fichier
+                # On utilise ContentFile(b"") pour satisfaire le FileField de Django sans copier le fichier lourd.
+                # Le vrai fichier est déjà dans /recordings/ géré par LiveKit/Caddy.
                 nouveau_fichier = Fichiers.objects.create(
-                    nom=nom_fichier,
-                    url=public_url,  # Si ton champ s'appelle 'fichier' (FileField), adapte ici
+                    uploade_par=expediteur,
+                    classe=enregistrement.classe,
+                    nom_original=nom_fichier,
+                    nom_stockage=file_name_only,
+                    type_fichier=type_msg,
+                    mime_type='audio/ogg' if est_audio else 'video/mp4',
+                    is_voice_note=est_audio,
+                    fichier_local=ContentFile(b"", name=file_name_only) 
                 )
                 
-                # Étape B : Créer le Message en liant le fichier
+                # ÉTAPE B : Créer le Message (Modèle 'Messages' au pluriel)
                 Messages.objects.create(
                     expediteur=expediteur,
                     classe=enregistrement.classe,
-                    type_canal='chat_groupe',      # Obligatoire d'après ton modèle
-                    type_message=type_msg,         # 'audio' ou 'video'
+                    type_canal='chat_groupe',
+                    type_message=type_msg,
                     contenu=contenu_message,
-                    fichier=nouveau_fichier,       # Lien vers l'objet Fichiers créé
-                    is_systeme=True,               # Obligatoire d'après ton modèle
-                    # recu_par et lu_par_ids ont default=list, donc pas besoin de les remplir
+                    fichier=nouveau_fichier,
+                    is_systeme=True,
                 )
-                
-                print(f"✅ MESSAGE ET FICHIER CRÉÉS DANS LE CHAT pour la classe {enregistrement.classe.nom}")
+                print(f"✅ MESSAGE ET FICHIER CRÉÉS pour la classe {enregistrement.classe.nom}")
                 
             except Exception as db_err:
-                print(f"❌ Erreur lors de la création en BDD (Fichier/Message) : {str(db_err)}")
-                # Fallback : créer le message sans fichier si la création du fichier échoue
+                print(f"❌ Erreur création BDD: {str(db_err)}")
+                # Fallback : créer le message sans fichier si la création de Fichiers échoue
                 Messages.objects.create(
                     expediteur=expediteur,
                     classe=enregistrement.classe,
                     type_canal='chat_groupe',
                     type_message='texte',
-                    contenu=f"{contenu_message}\n(Lien direct : {public_url})",
+                    contenu=f"{contenu_message}\n\n🔗 Lien direct : {public_url}",
                     is_systeme=True,
                 )
 
