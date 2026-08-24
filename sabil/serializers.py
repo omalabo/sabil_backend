@@ -204,7 +204,11 @@ class CatalogueCoursSerializer(serializers.ModelSerializer):
 # ================= MESSAGERIE & NOTIFICATIONS =================
 class MessageSerializer(serializers.ModelSerializer):
     expediteur_nom = serializers.CharField(source='expediteur.display_name', read_only=True)
-    fichier_url = serializers.CharField(source='fichier.fichier_local.url', read_only=True)
+    
+    # ✅ MODIFICATION : SerializerMethodField pour gérer dynamiquement l'URL
+    # (LiveKit pour les enregistrements audio/vidéo, Django pour les autres fichiers)
+    fichier_url = serializers.SerializerMethodField(read_only=True)
+    
     nom_fichier = serializers.CharField(source='fichier.nom_original', read_only=True)
     fichier_expires_at = serializers.DateTimeField(source='fichier.fichier_expires_at', read_only=True, allow_null=True)
     is_voice_note = serializers.BooleanField(source='fichier.is_voice_note', read_only=True)
@@ -222,25 +226,74 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Messages
         fields = '__all__'
         read_only_fields = [
-            'id', 'expediteur', 'type_canal', 'is_systeme', 'recu_par','lu_par_ids',
+            'id', 'expediteur', 'type_canal', 'is_systeme', 'recu_par', 'lu_par_ids',
             'created_at', 'deleted_at', 
             'fichier_expires_at', 'is_voice_note',
             'fichier',  # <--- TRÈS IMPORTANT
-            'reply_to_preview'
+            'reply_to_preview',
+            'fichier_url',  # ✅ AJOUT : fichier_url est aussi en lecture seule
         ]
+
+    # ✅ NOUVELLE MÉTHODE : Gère dynamiquement l'URL du fichier
+    def get_fichier_url(self, obj):
+        """
+        Retourne l'URL du fichier selon son type :
+        - Pour les enregistrements LiveKit (audio/vidéo) → URL publique LiveKit
+        - Pour les autres fichiers (images, documents, vocaux classiques) → URL Django MEDIA
+        """
+        if not obj.fichier:
+            return None
+        
+        # Cas 1 : Enregistrement LiveKit (audio ou vidéo de cours)
+        # On détecte via le type_message ET la présence d'un nom_stockage
+        if obj.type_message in ['audio', 'video'] and obj.fichier.nom_stockage:
+            # Vérifie si c'est bien un enregistrement LiveKit (préfixe audio_ ou screen_)
+            nom_stockage = obj.fichier.nom_stockage
+            if nom_stockage.startswith('audio_') or nom_stockage.startswith('screen_'):
+                return f"https://live.sabil-al-ilm.org/recordings/{nom_stockage}"
+        
+        # Cas 2 : Fichier classique (uploadé via Django)
+        # On utilise l'URL par défaut du FileField
+        if hasattr(obj.fichier, 'fichier_local') and obj.fichier.fichier_local:
+            try:
+                return obj.fichier.fichier_local.url
+            except ValueError:
+                # Le fichier n'existe pas physiquement
+                return None
+        
+        return None
 
     def get_reply_to_preview(self, obj):
         if not obj.reply_to:
             return None
-            
         
         expediteur_nom = "Utilisateur"
         if hasattr(obj.reply_to.expediteur, 'display_name'):
             expediteur_nom = obj.reply_to.expediteur.display_name
-            
+        
         nom_fichier = None
         if hasattr(obj.reply_to, 'fichier') and obj.reply_to.fichier:
             nom_fichier = obj.reply_to.fichier.nom_original
+
+        # ✅ MODIFICATION : Utiliser la même logique que get_fichier_url pour la preview
+        fichier_url = None
+        if obj.reply_to.fichier_id and hasattr(obj.reply_to, 'fichier') and obj.reply_to.fichier:
+            fichier_reply = obj.reply_to.fichier
+            # Même logique que pour le message principal
+            if obj.reply_to.type_message in ['audio', 'video'] and fichier_reply.nom_stockage:
+                nom_stockage = fichier_reply.nom_stockage
+                if nom_stockage.startswith('audio_') or nom_stockage.startswith('screen_'):
+                    fichier_url = f"https://live.sabil-al-ilm.org/recordings/{nom_stockage}"
+                elif hasattr(fichier_reply, 'fichier_local') and fichier_reply.fichier_local:
+                    try:
+                        fichier_url = fichier_reply.fichier_local.url
+                    except ValueError:
+                        fichier_url = None
+            elif hasattr(fichier_reply, 'fichier_local') and fichier_reply.fichier_local:
+                try:
+                    fichier_url = fichier_reply.fichier_local.url
+                except ValueError:
+                    fichier_url = None
 
         return {
             'id': str(obj.reply_to.id),
@@ -248,9 +301,8 @@ class MessageSerializer(serializers.ModelSerializer):
             'type_message': obj.reply_to.type_message,
             'contenu': obj.reply_to.contenu,
             'nom_fichier': nom_fichier,
-            'fichier_url':  obj.reply_to.fichier.fichier_local.url if  obj.reply_to.fichier_id else None, 
+            'fichier_url': fichier_url,  # ✅ URL cohérente avec le message principal
         }
-
 
 class PrivateMessageSerializer(serializers.ModelSerializer):
     expediteur_nom = serializers.CharField(source='expediteur.display_name', read_only=True)
