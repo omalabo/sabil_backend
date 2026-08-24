@@ -255,20 +255,16 @@ def livekit_webhook(request):
             return JsonResponse({'status': 'ok'}, status=200)
 
         # ═══════════════════════════════════════════════════════════
-        # 3. Un fichier (audio OU écran) vient de se terminer (CORRIGÉ)
+        # 3. Un fichier (audio OU écran) vient de se terminer (CORRIGÉ POUR TON MODÈLE)
         # ═══════════════════════════════════════════════════════════
         if event == 'egress_ended':
-            # 🔴 CORRECTION : LiveKit envoie les données dans 'egressInfo' (camelCase)
             egress_info = payload.get('egressInfo') or payload.get('egress') or payload
             
-            # 🔴 CORRECTION : Récupérer l'ID en camelCase ou snake_case
             egress_id = egress_info.get('egressId') or egress_info.get('egress_id')
             
-            # 🔴 CORRECTION : Récupérer la durée (LiveKit l'envoie en nanosecondes)
             duree_ns = egress_info.get('duration')
             duree = int(float(duree_ns) / 1_000_000_000) if duree_ns else None
             
-            # 🔴 CORRECTION : Récupérer le nom du fichier (dans fileResults ou file)
             files_list = egress_info.get('fileResults') or egress_info.get('file_results') or []
             filename = ""
             
@@ -282,23 +278,20 @@ def livekit_webhook(request):
             print(f"🎣 WEBHOOK egress_ended traité ! egress_id: {egress_id}, filename: {filename}, duree: {duree}s")
 
             if not egress_id:
-                print("⚠️ egress_id manquant dans le payload, impossible de lier à la BDD")
+                print("⚠️ egress_id manquant dans le payload")
                 return JsonResponse({'status': 'ignored'}, status=200)
 
-            # 5. Trouver l'enregistrement en BDD
             try:
                 enregistrement = Enregistrements.objects.get(egress_id=egress_id, deleted_at__isnull=True)
             except Enregistrements.DoesNotExist:
                 print(f"⚠️ Aucun enregistrement trouvé en BDD pour egress_id: {egress_id}")
                 return JsonResponse({'status': 'ignored'}, status=200)
 
-            # 6. Construire l'URL publique
             file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video.split('/')[-1]
             public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
             
             print(f"🔗 URL publique générée : {public_url}")
 
-            # 7. Mettre à jour la BDD
             enregistrement.url_video = public_url
             enregistrement.statut = 'termine'
             enregistrement.ended_at = timezone.now()
@@ -306,7 +299,6 @@ def livekit_webhook(request):
                 enregistrement.duree_secondes = duree
             enregistrement.save()
 
-            # 8. Créer le message dans le chat
             expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
 
             duree_txt = ""
@@ -321,26 +313,53 @@ def livekit_webhook(request):
                 type_msg = 'audio'
             else:
                 titre = "🖥️ Extrait d'écran partagé disponible"
-                nom_fichier = f"Ecran_{enregistrement.classe.nom}_{enregistrement.id}.mp4"
+                nom_fichier = f"Ecran_{enregistrement.classe.nom}.mp4"
                 type_msg = 'video'
 
-            Message.objects.create(
-                classe=enregistrement.classe,
-                expediteur=expediteur,
-                contenu=(
-                    f"{titre}\n"
-                    f"📚 Classe : *{enregistrement.classe.nom}*{duree_txt}\n\n"
-                    f"Cliquez sur le fichier ci-joint pour l'écouter/regarder.\n"
-                    f"⚠️ *Disponible pendant 7 jours.*"
-                ),
-                type_message=type_msg,
-                fichier_url=public_url,
-                nom_fichier=nom_fichier
+            contenu_message = (
+                f"{titre}\n"
+                f"📚 Classe : *{enregistrement.classe.nom}*{duree_txt}\n\n"
+                f"Cliquez sur le fichier ci-joint pour l'écouter/regarder.\n"
+                f"⚠️ *Disponible pendant 7 jours.*"
             )
-            
-            print(f"✅ MESSAGE CRÉÉ DANS LE CHAT pour la classe {enregistrement.classe.nom}")
+
+            # 🔴 CORRECTION MAJEURE : Création en 2 étapes à cause de la ForeignKey 'fichier'
+            try:
+                # Étape A : Créer l'objet Fichier
+                # ⚠️ ADAPTE 'nom' et 'url' (ou 'fichier') SELON LES VRAIS CHAMPS DE TON MODÈLE Fichiers
+                nouveau_fichier = Fichiers.objects.create(
+                    nom=nom_fichier,
+                    url=public_url,  # Si ton champ s'appelle 'fichier' (FileField), adapte ici
+                )
+                
+                # Étape B : Créer le Message en liant le fichier
+                Message.objects.create(
+                    expediteur=expediteur,
+                    classe=enregistrement.classe,
+                    type_canal='chat_groupe',      # Obligatoire d'après ton modèle
+                    type_message=type_msg,         # 'audio' ou 'video'
+                    contenu=contenu_message,
+                    fichier=nouveau_fichier,       # Lien vers l'objet Fichiers créé
+                    is_systeme=True,               # Obligatoire d'après ton modèle
+                    # recu_par et lu_par_ids ont default=list, donc pas besoin de les remplir
+                )
+                
+                print(f"✅ MESSAGE ET FICHIER CRÉÉS DANS LE CHAT pour la classe {enregistrement.classe.nom}")
+                
+            except Exception as db_err:
+                print(f"❌ Erreur lors de la création en BDD (Fichier/Message) : {str(db_err)}")
+                # Fallback : créer le message sans fichier si la création du fichier échoue
+                Message.objects.create(
+                    expediteur=expediteur,
+                    classe=enregistrement.classe,
+                    type_canal='chat_groupe',
+                    type_message='texte',
+                    contenu=f"{contenu_message}\n(Lien direct : {public_url})",
+                    is_systeme=True,
+                )
+
             return JsonResponse({'status': 'success', 'message_created': True}, status=200)
-         
+            
         return JsonResponse({'status': 'ignored'}, status=200)
 
     except json.JSONDecodeError:
