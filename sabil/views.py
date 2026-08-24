@@ -169,7 +169,9 @@ def livekit_webhook(request):
         payload = json.loads(request.body)
         event = payload.get('event')
 
-        # ═══ Un nouveau partage d'écran démarre → on lance un egress dédié ═══
+        # ═══════════════════════════════════════════════════════════
+        # 1. Un nouveau partage d'écran démarre → on lance un egress dédié
+        # ═══════════════════════════════════════════════════════════
         if event == 'track_published':
             track = payload.get('track', {})
             participant = payload.get('participant', {})
@@ -218,7 +220,9 @@ def livekit_webhook(request):
 
             return JsonResponse({'status': 'ok'}, status=200)
 
-        # ═══ Un partage d'écran s'arrête → on stoppe SON fichier précisément ═══
+        # ═══════════════════════════════════════════════════════════
+        # 2. Un partage d'écran s'arrête → on stoppe SON fichier précisément
+        # ═══════════════════════════════════════════════════════════
         if event == 'track_unpublished':
             track = payload.get('track', {})
             room = payload.get('room', {})
@@ -229,7 +233,6 @@ def livekit_webhook(request):
                 classe = get_classe_from_room(room_name)
 
                 if classe:
-                    # On prend le PLUS RÉCENT enregistrement écran encore actif pour cette classe
                     enreg_screen = Enregistrements.objects.filter(
                         classe=classe, statut='en_cours', url_video__startswith='screen_'
                     ).order_by('-started_at').first()
@@ -251,20 +254,23 @@ def livekit_webhook(request):
 
             return JsonResponse({'status': 'ok'}, status=200)
 
-        # ═══ Un fichier (audio OU un des écrans) vient de se terminer ═══
+        # ═══════════════════════════════════════════════════════════
+        # 3. Un fichier (audio OU écran) vient de se terminer (CORRIGÉ)
+        # ═══════════════════════════════════════════════════════════
         if event == 'egress_ended':
-            # 🔴 DEBUG : Affiche TOUT le payload reçu pour voir la structure exacte
-            print("🔴 DEBUG WEBHOOK PAYLOAD:", json.dumps(payload, indent=2))
+            # 🔴 CORRECTION : LiveKit envoie les données dans 'egressInfo' (camelCase)
+            egress_info = payload.get('egressInfo') or payload.get('egress') or payload
             
-            # LiveKit met parfois les infos dans 'egress', parfois à la racine
-            egress_info = payload.get('egress') or payload
+            # 🔴 CORRECTION : Récupérer l'ID en camelCase ou snake_case
+            egress_id = egress_info.get('egressId') or egress_info.get('egress_id')
             
-            egress_id = egress_info.get('egress_id')
+            # 🔴 CORRECTION : Récupérer la durée (LiveKit l'envoie en nanosecondes)
+            duree_ns = egress_info.get('duration')
+            duree = int(float(duree_ns) / 1_000_000_000) if duree_ns else None
             
-            # Gérer à la fois "files" (tableau) et "file" (objet)
-            files_list = egress_info.get('files') or egress_info.get('file_results') or []
+            # 🔴 CORRECTION : Récupérer le nom du fichier (dans fileResults ou file)
+            files_list = egress_info.get('fileResults') or egress_info.get('file_results') or []
             filename = ""
-            duree = egress_info.get('duration')
             
             if files_list and len(files_list) > 0:
                 first_file = files_list[0]
@@ -273,31 +279,34 @@ def livekit_webhook(request):
                 file_dict = egress_info.get('file', {})
                 filename = file_dict.get('filename') or file_dict.get('location') or ""
 
-            print(f"🎣 WEBHOOK egress_ended traité ! egress_id: {egress_id}, filename brut: {filename}")
+            print(f"🎣 WEBHOOK egress_ended traité ! egress_id: {egress_id}, filename: {filename}, duree: {duree}s")
 
             if not egress_id:
                 print("⚠️ egress_id manquant dans le payload, impossible de lier à la BDD")
                 return JsonResponse({'status': 'ignored'}, status=200)
 
+            # 5. Trouver l'enregistrement en BDD
             try:
                 enregistrement = Enregistrements.objects.get(egress_id=egress_id, deleted_at__isnull=True)
             except Enregistrements.DoesNotExist:
                 print(f"⚠️ Aucun enregistrement trouvé en BDD pour egress_id: {egress_id}")
                 return JsonResponse({'status': 'ignored'}, status=200)
 
-            # Nettoyer le chemin pour n'avoir que le nom du fichier
+            # 6. Construire l'URL publique
             file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video.split('/')[-1]
             public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
             
             print(f"🔗 URL publique générée : {public_url}")
 
+            # 7. Mettre à jour la BDD
             enregistrement.url_video = public_url
             enregistrement.statut = 'termine'
             enregistrement.ended_at = timezone.now()
             if duree:
-                enregistrement.duree_secondes = int(duree)
+                enregistrement.duree_secondes = duree
             enregistrement.save()
 
+            # 8. Créer le message dans le chat
             expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
 
             duree_txt = ""
@@ -338,6 +347,8 @@ def livekit_webhook(request):
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
     except Exception as e:
         print(f"❌ Erreur Webhook LiveKit: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
      
 
