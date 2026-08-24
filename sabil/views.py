@@ -129,13 +129,13 @@ def toggle_recording(request, classe_id):
         return Response({"error": "Impossible de gérer l'enregistrement.", "details": str(e)}, status=500)
 
     if result["action"] == "stopped":
-        Enregistrement.objects.filter(
+        Enregistrements.objects.filter(
             egress_id__in=result["egress_ids"], deleted_at__isnull=True
         ).update(statut='termine', ended_at=timezone.now())
         return Response({"status": "stopped", "message": "Enregistrement arrêté. Les fichiers seront disponibles sous peu."})
     else:
         derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-        Enregistrement.objects.create(
+        Enregistrements.objects.create(
             classe=classe,
             seance=derniere_seance,
             demarre_par=request.user,
@@ -183,7 +183,7 @@ def livekit_webhook(request):
                 classe = get_classe_from_room(room_name)
 
                 if classe:
-                    audio_actif = Enregistrement.objects.filter(
+                    audio_actif = Enregistrements.objects.filter(
                         classe=classe, statut='en_cours', url_video__startswith='audio_'
                     ).exists()
 
@@ -206,7 +206,7 @@ def livekit_webhook(request):
                         try:
                             result = asyncio.run(_start_screen())
                             derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-                            Enregistrement.objects.create(
+                            Enregistrements.objects.create(
                                 classe=classe,
                                 seance=derniere_seance,
                                 egress_id=result["egress_id"],
@@ -230,7 +230,7 @@ def livekit_webhook(request):
 
                 if classe:
                     # On prend le PLUS RÉCENT enregistrement écran encore actif pour cette classe
-                    enreg_screen = Enregistrement.objects.filter(
+                    enreg_screen = Enregistrements.objects.filter(
                         classe=classe, statut='en_cours', url_video__startswith='screen_'
                     ).order_by('-created_at').first()
 
@@ -262,10 +262,10 @@ def livekit_webhook(request):
             duree = egress_info.get('duration')
 
             try:
-                enregistrement = Enregistrement.objects.get(
+                enregistrement = Enregistrements.objects.get(
                     egress_id=egress_id, deleted_at__isnull=True
                 )
-            except Enregistrement.DoesNotExist:
+            except Enregistrements.DoesNotExist:
                 return JsonResponse({'status': 'ignored'}, status=200)
 
             file_name_only = filename if filename else enregistrement.url_video.split('/')[-1]
