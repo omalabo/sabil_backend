@@ -232,7 +232,7 @@ def livekit_webhook(request):
                     # On prend le PLUS RÉCENT enregistrement écran encore actif pour cette classe
                     enreg_screen = Enregistrements.objects.filter(
                         classe=classe, statut='en_cours', url_video__startswith='screen_'
-                    ).order_by('-created_at').first()
+                    ).order_by('-started_at').first()
 
                     if enreg_screen:
                         async def _stop_screen():
