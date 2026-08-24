@@ -252,24 +252,38 @@ def livekit_webhook(request):
             return JsonResponse({'status': 'ok'}, status=200)
 
         # ═══ Un fichier (audio OU un des écrans) vient de se terminer ═══
+        # ═══ Un fichier (audio OU un des écrans) vient de se terminer ═══
         if event == 'egress_ended':
             egress_info = payload.get('egress', {})
             egress_id = egress_info.get('egress_id')
-            file_info = egress_info.get('file', {})
-            filename = file_info.get('filename') or (
-                egress_info.get('filepath', '').split('/')[-1] if egress_info.get('filepath') else ''
-            )
+            
+            # 🔴 CORRECTION : Lire le tableau "files" ou "file_results"
+            files_list = egress_info.get('files') or egress_info.get('file_results') or []
+            filename = ""
             duree = egress_info.get('duration')
+            
+            if files_list and len(files_list) > 0:
+                # Prendre le premier fichier de la liste
+                first_file = files_list[0]
+                filename = first_file.get('filename') or first_file.get('location') or ""
+            else:
+                # Fallback au cas où ce serait un objet "file" unique
+                file_dict = egress_info.get('file', {})
+                filename = file_dict.get('filename') or file_dict.get('location') or ""
+
+            print(f"🎣 WEBHOOK egress_ended reçu ! egress_id: {egress_id}, filename brut: {filename}")
 
             try:
-                enregistrement = Enregistrements.objects.get(
-                    egress_id=egress_id, deleted_at__isnull=True
-                )
+                enregistrement = Enregistrements.objects.get(egress_id=egress_id, deleted_at__isnull=True)
             except Enregistrements.DoesNotExist:
+                print(f"⚠️ Aucun enregistrement trouvé en BDD pour egress_id: {egress_id}")
                 return JsonResponse({'status': 'ignored'}, status=200)
 
-            file_name_only = filename if filename else enregistrement.url_video.split('/')[-1]
+            # Nettoyer le chemin pour n'avoir que le nom du fichier
+            file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video.split('/')[-1]
             public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
+            
+            print(f"🔗 URL publique générée : {public_url}")
 
             enregistrement.url_video = public_url
             enregistrement.statut = 'termine'
@@ -278,11 +292,7 @@ def livekit_webhook(request):
                 enregistrement.duree_secondes = int(duree)
             enregistrement.save()
 
-            expediteur = (
-                enregistrement.demarre_par or
-                enregistrement.classe.professeur or
-                Users.objects.filter(is_staff=True).first()
-            )
+            expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
 
             duree_txt = ""
             if enregistrement.duree_secondes:
@@ -299,6 +309,7 @@ def livekit_webhook(request):
                 nom_fichier = f"Ecran_{enregistrement.classe.nom}_{enregistrement.id}.mp4"
                 type_msg = 'video'
 
+            # 🔴 CRÉATION DU MESSAGE DANS LE CHAT
             Message.objects.create(
                 classe=enregistrement.classe,
                 expediteur=expediteur,
@@ -312,9 +323,9 @@ def livekit_webhook(request):
                 fichier_url=public_url,
                 nom_fichier=nom_fichier
             )
-
+            
             return JsonResponse({'status': 'success', 'message_created': True}, status=200)
-
+         
         return JsonResponse({'status': 'ignored'}, status=200)
 
     except json.JSONDecodeError:
