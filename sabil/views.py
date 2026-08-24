@@ -333,7 +333,7 @@ def livekit_webhook(request):
                 )
                 
                 # Étape B : Créer le Message en liant le fichier
-                Message.objects.create(
+                Messages.objects.create(
                     expediteur=expediteur,
                     classe=enregistrement.classe,
                     type_canal='chat_groupe',      # Obligatoire d'après ton modèle
@@ -349,7 +349,7 @@ def livekit_webhook(request):
             except Exception as db_err:
                 print(f"❌ Erreur lors de la création en BDD (Fichier/Message) : {str(db_err)}")
                 # Fallback : créer le message sans fichier si la création du fichier échoue
-                Message.objects.create(
+                Messages.objects.create(
                     expediteur=expediteur,
                     classe=enregistrement.classe,
                     type_canal='chat_groupe',
