@@ -292,7 +292,9 @@ def livekit_webhook(request):
             return JsonResponse({'status': 'ok'}, status=200)
 
         # ═══════════════════════════════════════════════════════════
-        # 3. Un fichier (audio OU écran) vient de se terminer (CORRIGÉ)
+        # 3. Un fichier (audio OU écran) vient de se terminer
+        # → On sauvegarde juste en BDD, SANS créer de message dans le chat
+        # → Le message final (fusionné) sera créé par 'room_finished'
         # ═══════════════════════════════════════════════════════════
         if event == 'egress_ended':
             egress_info = payload.get('egressInfo') or payload.get('egress') or payload
@@ -321,78 +323,118 @@ def livekit_webhook(request):
                 return JsonResponse({'status': 'ignored'}, status=200)
 
             file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video.split('/')[-1]
-            public_url = f"https://recordings.sabil-al-ilm.org/{file_name_only}"
-            
-            print(f"🔗 URL publique générée : {public_url}")
 
-            # Mise à jour de l'enregistrement
-            enregistrement.url_video = public_url
+            # ✅ On garde juste le NOM du fichier (pas l'URL complète)
+            # → ffmpeg a besoin du nom brut pour retrouver le fichier physique
+            enregistrement.url_video = file_name_only
             enregistrement.statut = 'termine'
             enregistrement.ended_at = timezone.now()
             if duree:
                 enregistrement.duree_secondes = duree
             enregistrement.save()
 
-            expediteur = enregistrement.demarre_par or enregistrement.classe.professeur or Users.objects.filter(is_staff=True).first()
-            duree_txt = f"\n⏱ Durée : {enregistrement.duree_secondes // 60} min" if enregistrement.duree_secondes else ""
-            
-            est_audio = file_name_only.startswith('audio_')
-            type_msg = 'audio' if est_audio else 'video'
-            nom_fichier = f"Audio_{enregistrement.classe.nom}.ogg" if est_audio else f"Ecran_{enregistrement.classe.nom}.webm"
-            
-            # ✅ Correction : on définit le titre AVANT la f-string pour éviter le backslash dans les {}
-            titre = "🎵 Audio du cours disponible" if est_audio else "🖥️ Extrait d'écran partagé disponible"
-            
-            contenu_message = (
-                f"{titre}\n"
-                f"📚 Classe : *{enregistrement.classe.nom}*{duree_txt}\n\n"
-                f"Cliquez sur le fichier ci-joint pour l'écouter/regarder.\n"
-                f"⚠️ *Disponible pendant 7 jours.*"
-            )
+            print(f"💾 Fichier sauvegardé en BDD (en attente de fusion) : {file_name_only}")
 
-            try:
-                # ÉTAPE A : Créer l'objet Fichier
-                # On utilise ContentFile(b"") pour satisfaire le FileField de Django sans copier le fichier lourd.
-                # Le vrai fichier est déjà dans /recordings/ géré par LiveKit/Caddy.
-                nouveau_fichier = Fichiers.objects.create(
-                    uploade_par=expediteur,
-                    classe=enregistrement.classe,
-                    nom_original=nom_fichier,
-                    nom_stockage=file_name_only,
-                    type_fichier=type_msg,
-                    mime_type='audio/ogg' if est_audio else 'video/webm',
-                    is_voice_note=est_audio,
-                    fichier_local=ContentFile(b"", name=file_name_only) 
-                )
-                
-                # ÉTAPE B : Créer le Message (Modèle 'Messages' au pluriel)
-                Messages.objects.create(
-                    expediteur=expediteur,
-                    classe=enregistrement.classe,
-                    type_canal='chat_groupe',
-                    type_message=type_msg,
-                    contenu=contenu_message,
-                    fichier=nouveau_fichier,
-                    is_systeme=True,
-                )
-                print(f"✅ MESSAGE ET FICHIER CRÉÉS pour la classe {enregistrement.classe.nom}")
-                
-            except Exception as db_err:
-                print(f"❌ Erreur création BDD: {str(db_err)}")
-                # Fallback : créer le message sans fichier si la création de Fichiers échoue
-                Messages.objects.create(
-                    expediteur=expediteur,
-                    classe=enregistrement.classe,
-                    type_canal='chat_groupe',
-                    type_message='texte',
-                    contenu=f"{contenu_message}\n\n🔗 Lien direct : {public_url}",
-                    is_systeme=True,
-                )
+            # ⚠️ PLUS DE création de Message/Fichiers ici — ça se fera uniquement
+            # à la fin du cours, dans le bloc 'room_finished' juste après, avec
+            # la vidéo fusionnée (audio + écran synchronisés).
 
-            return JsonResponse({'status': 'success', 'message_created': True}, status=200)
-            
+            return JsonResponse({'status': 'success'}, status=200)
+
+        # ═══════════════════════════════════════════════════════════
+        # 4. Le cours est terminé → on fusionne audio + écran(s) avec ffmpeg
+        #    et on envoie UN SEUL message final dans le chat
+        # ═══════════════════════════════════════════════════════════
+        if event == 'room_finished':
+            room = payload.get('room', {})
+            room_name = room.get('name')
+            classe = get_classe_from_room(room_name)
+
+            if classe:
+                seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
+
+                audio = Enregistrements.objects.filter(
+                    classe=classe, seance=seance, statut='termine',
+                    url_video__startswith='audio_'
+                ).order_by('-created_at').first()
+
+                if audio:
+                    screens = list(Enregistrements.objects.filter(
+                        classe=classe, seance=seance, statut='termine',
+                        url_video__startswith='screen_'
+                    ).order_by('created_at'))
+
+                    audio_filename = audio.url_video
+                    audio_start = audio.created_at
+                    total_duration = audio.duree_secondes or 0
+
+                    segments = []
+                    for s in screens:
+                        if not s.ended_at:
+                            continue
+                        offset = (s.created_at - audio_start).total_seconds()
+                        duration = (s.ended_at - s.created_at).total_seconds()
+                        if offset < 0 or duration <= 0:
+                            continue
+                        segments.append({
+                            "filename": s.url_video,
+                            "start_offset": round(offset, 2),
+                            "duration": round(duration, 2)
+                        })
+
+                    if total_duration > 0:
+                        timestamp = int(datetime.now().timestamp())
+                        output_filename = f"merged_{classe.id}_{timestamp}.mp4"
+
+                        try:
+                            import requests
+                            resp = requests.post(
+                                "https://processor.sabil-al-ilm.org/merge",
+                                json={
+                                    "audio_filename": audio_filename,
+                                    "total_duration": total_duration,
+                                    "segments": segments,
+                                    "output_filename": output_filename
+                                },
+                                timeout=300
+                            )
+                            if resp.status_code == 200:
+                                public_url = f"https://recordings.sabil-al-ilm.org/{output_filename}"
+                                expediteur = classe.professeur or Users.objects.filter(is_staff=True).first()
+
+                                Enregistrements.objects.create(
+                                    classe=classe, seance=seance,
+                                    demarre_par=classe.professeur,
+                                    egress_id=f"merged_{timestamp}",
+                                    url_video=output_filename,
+                                    statut='termine',
+                                    duree_secondes=int(total_duration)
+                                )
+                                Messages.objects.create(
+                                    expediteur=expediteur,
+                                    classe=classe,
+                                    type_canal='chat_groupe',
+                                    type_message='texte',
+                                    contenu=(
+                                        f"🎬 Replay complet du cours disponible\n"
+                                        f"📚 Classe : *{classe.nom}*\n\n"
+                                        f"Vidéo avec l'écran partagé synchronisé à l'audio.\n"
+                                        f"🔗 {public_url}\n\n"
+                                        f"⚠️ *Disponible pendant 7 jours.*"
+                                    ),
+                                    is_systeme=True,
+                                )
+                                print(f"✅ Fusion ffmpeg réussie: {output_filename}")
+                            else:
+                                print(f"❌ Fusion échouée: {resp.text}")
+                        except Exception as e:
+                            print(f"❌ Erreur appel processor: {str(e)}")
+                else:
+                    print(f"⚠️ Pas d'audio trouvé pour fusion, room {room_name}")
+
+            return JsonResponse({'status': 'ok'}, status=200)
+
         return JsonResponse({'status': 'ignored'}, status=200)
-
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
     except Exception as e:
