@@ -169,6 +169,9 @@ def livekit_webhook(request):
     try:
         payload = json.loads(request.body)
         event = payload.get('event')
+        # ═══ AJOUTE CETTE LIGNE ICI, tout de suite après avoir lu event ═══
+        print(f"🔔 WEBHOOK: event={payload.get('event')}, source={payload.get('track', {}).get('source')}")
+
 
         # ═══════════════════════════════════════════════════════════
         # 1. Un nouveau partage d'écran démarre → on lance un egress dédié
@@ -177,6 +180,7 @@ def livekit_webhook(request):
             track = payload.get('track', {})
             participant = payload.get('participant', {})
             room = payload.get('room', {})
+            print(f"👤 Participant metadata: {participant.get('metadata')}")
 
             is_screen_share = track.get('source') == 'SCREEN_SHARE'
             is_prof = 'role:professeur' in (participant.get('metadata') or '')
