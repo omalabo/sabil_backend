@@ -180,49 +180,51 @@ def livekit_webhook(request):
             track = payload.get('track', {})
             participant = payload.get('participant', {})
             room = payload.get('room', {})
-            print(f"👤 Participant metadata: {participant.get('metadata')}")
-
+        
             is_screen_share = track.get('source') == 'SCREEN_SHARE'
-            is_prof = 'role:professeur' in (participant.get('metadata') or '')
-
-            if is_screen_share and is_prof:
-                room_name = room.get('name')
-                classe = get_classe_from_room(room_name)
-
-                if classe:
-                    audio_actif = Enregistrements.objects.filter(
-                        classe=classe, statut='en_cours', url_video__startswith='audio_'
-                    ).exists()
-
-                    if audio_actif:
-                        async def _start_screen():
-                            lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
-                            try:
-                                timestamp = int(datetime.now().timestamp())
-                                filename = f"screen_{classe.id}_{timestamp}.mp4"
-                                req = api.TrackEgressRequest(
-                                    room_name=room_name,
-                                    track_id=track.get('sid'),
-                                    file=api.DirectFileOutput(filepath=f"/recordings/{filename}")
-                                )
-                                info = await lkapi.egress.start_track_egress(req)
-                                return {"egress_id": info.egress_id, "filename": filename}
-                            finally:
-                                await lkapi.aclose()
-
+            room_name = room.get('name')
+            classe = get_classe_from_room(room_name)
+        
+            is_prof = bool(
+                classe and classe.professeur and
+                participant.get('identity') == str(classe.professeur.id)
+            )
+        
+            if is_screen_share and is_prof and classe:
+                audio_actif = Enregistrements.objects.filter(
+                    classe=classe, statut='en_cours', url_video__startswith='audio_'
+                ).exists()
+        
+                if audio_actif:
+                    async def _start_screen():
+                        lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
                         try:
-                            result = asyncio.run(_start_screen())
-                            derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-                            Enregistrements.objects.create(
-                                classe=classe,
-                                seance=derniere_seance,
-                                egress_id=result["egress_id"],
-                                url_video=result["filename"],
-                                statut='en_cours'
+                            timestamp = int(datetime.now().timestamp())
+                            filename = f"screen_{classe.id}_{timestamp}.mp4"
+                            req = api.TrackEgressRequest(
+                                room_name=room_name,
+                                track_id=track.get('sid'),
+                                file=api.DirectFileOutput(filepath=f"/recordings/{filename}")
                             )
-                        except Exception as e:
-                            print(f"❌ Impossible de démarrer l'egress écran auto: {str(e)}")
-
+                            info = await lkapi.egress.start_track_egress(req)
+                            return {"egress_id": info.egress_id, "filename": filename}
+                        finally:
+                            await lkapi.aclose()
+        
+                    try:
+                        result = asyncio.run(_start_screen())
+                        derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
+                        Enregistrements.objects.create(
+                            classe=classe,
+                            seance=derniere_seance,
+                            egress_id=result["egress_id"],
+                            url_video=result["filename"],
+                            statut='en_cours'
+                        )
+                        print(f"✅ Egress écran démarré : {result['filename']}")
+                    except Exception as e:
+                        print(f"❌ Impossible de démarrer l'egress écran auto: {str(e)}")
+        
             return JsonResponse({'status': 'ok'}, status=200)
 
         # ═══════════════════════════════════════════════════════════
