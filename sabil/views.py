@@ -343,7 +343,6 @@ def livekit_webhook(request):
 
         # ═══════════════════════════════════════════════════════════
         # 4. Le cours est terminé → on fusionne audio + écran(s) avec ffmpeg
-        #    et on envoie UN SEUL message final dans le chat
         # ═══════════════════════════════════════════════════════════
         if event == 'room_finished':
             room = payload.get('room', {})
@@ -366,7 +365,15 @@ def livekit_webhook(request):
 
                     audio_filename = audio.url_video
                     audio_start = audio.started_at
-                    total_duration = audio.duree_secondes or 0
+                    audio_end = audio.ended_at or timezone.now()
+                    
+                    # 🔴 CORRECTION 1 : Calculer la durée depuis la BDD si le webhook ne la donne pas
+                    total_duration = audio.duree_secondes
+                    if not total_duration:
+                        total_duration = int((audio_end - audio_start).total_seconds())
+                    
+                    # S'assurer que la durée est > 0 pour que ffmpeg fonctionne
+                    total_duration = max(1, total_duration)
 
                     segments = []
                     for s in screens:
@@ -382,14 +389,17 @@ def livekit_webhook(request):
                             "duration": round(duration, 2)
                         })
 
+                    # 🔴 CORRECTION 2 : Lancer la fusion (même s'il n'y a pas d'écran, ça créera une vidéo noir + audio)
                     if total_duration > 0:
                         timestamp = int(datetime.now().timestamp())
                         output_filename = f"merged_{classe.id}_{timestamp}.mp4"
 
                         try:
                             import requests
+                            print(f"🚀 Tentative de fusion vers le processor: {output_filename}")
+                            
                             resp = requests.post(
-                                "https://processor.sabil-al-ilm.org/merge",
+                                "https://processor.sabil-al-ilm.org/merge", # 🔴 URL CORRECTE AVEC /merge
                                 json={
                                     "audio_filename": audio_filename,
                                     "total_duration": total_duration,
@@ -398,10 +408,12 @@ def livekit_webhook(request):
                                 },
                                 timeout=300
                             )
+                            
                             if resp.status_code == 200:
                                 public_url = f"https://recordings.sabil-al-ilm.org/{output_filename}"
                                 expediteur = classe.professeur or Users.objects.filter(is_staff=True).first()
 
+                                # 1. Sauvegarder l'enregistrement fusionné en BDD
                                 Enregistrements.objects.create(
                                     classe=classe, seance=seance,
                                     demarre_par=classe.professeur,
@@ -410,11 +422,13 @@ def livekit_webhook(request):
                                     statut='termine',
                                     duree_secondes=int(total_duration)
                                 )
+                                
+                                # 2. Créer le message dans le chat
                                 Messages.objects.create(
                                     expediteur=expediteur,
                                     classe=classe,
                                     type_canal='chat_groupe',
-                                    type_message='texte',
+                                    type_message='video',
                                     contenu=(
                                         f"🎬 Replay complet du cours disponible\n"
                                         f"📚 Classe : *{classe.nom}*\n\n"
@@ -424,17 +438,17 @@ def livekit_webhook(request):
                                     ),
                                     is_systeme=True,
                                 )
-                                print(f"✅ Fusion ffmpeg réussie: {output_filename}")
+                                print(f"✅ Fusion ffmpeg réussie et message envoyé: {output_filename}")
                             else:
-                                print(f"❌ Fusion échouée: {resp.text}")
+                                print(f"❌ Fusion échouée (HTTP {resp.status_code}): {resp.text}")
                         except Exception as e:
-                            print(f"❌ Erreur appel processor: {str(e)}")
+                            print(f"❌ Erreur critique appel processor: {str(e)}")
+                            import traceback
+                            traceback.print_exc()
                 else:
                     print(f"⚠️ Pas d'audio trouvé pour fusion, room {room_name}")
 
             return JsonResponse({'status': 'ok'}, status=200)
-
-        return JsonResponse({'status': 'ignored'}, status=200)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
     except Exception as e:
