@@ -98,7 +98,6 @@ def toggle_recording(request, classe_id):
             actifs = [e for e in res.items if e.status == api.EgressStatus.EGRESS_ACTIVE]
 
             if actifs:
-                # On arrête TOUT ce qui tourne encore (audio + écran(s) en cours)
                 stopped_ids = []
                 for e in actifs:
                     await lkapi.egress.stop_egress(
@@ -107,7 +106,7 @@ def toggle_recording(request, classe_id):
                     stopped_ids.append(e.egress_id)
                 return {"action": "stopped", "egress_ids": stopped_ids}
 
-            # On démarre uniquement l'audio ; les écrans seront gérés automatiquement par le webhook
+            # ── Démarrer l'audio ──
             timestamp = int(datetime.now().timestamp())
             filename = f"audio_{classe_id}_{timestamp}.ogg"
             req_audio = api.RoomCompositeEgressRequest(
@@ -119,7 +118,31 @@ def toggle_recording(request, classe_id):
                 )]
             )
             info_audio = await lkapi.egress.start_room_composite_egress(req_audio)
-            return {"action": "started", "egress_id": info_audio.egress_id, "filename": filename}
+
+            resultats = [{"type": "audio", "egress_id": info_audio.egress_id, "filename": filename}]
+
+            # ── NOUVEAU : rattraper un écran déjà partagé ──
+            participants = await lkapi.room.list_participants(
+                api.ListParticipantsRequest(room=room_name)
+            )
+            for p in participants.participants:
+                for t in p.tracks:
+                    if t.source == api.TrackSource.SCREEN_SHARE:
+                        ts = int(datetime.now().timestamp())
+                        screen_filename = f"screen_{classe_id}_{ts}.webm"
+                        req_screen = api.TrackEgressRequest(
+                            room_name=room_name,
+                            track_id=t.sid,
+                            file=api.DirectFileOutput(filepath=f"/recordings/{screen_filename}")
+                        )
+                        info_screen = await lkapi.egress.start_track_egress(req_screen)
+                        resultats.append({
+                            "type": "screen",
+                            "egress_id": info_screen.egress_id,
+                            "filename": screen_filename
+                        })
+
+            return {"action": "started", "jobs": resultats}
         finally:
             await lkapi.aclose()
 
@@ -136,15 +159,21 @@ def toggle_recording(request, classe_id):
         return Response({"status": "stopped", "message": "Enregistrement arrêté. Les fichiers seront disponibles sous peu."})
     else:
         derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-        Enregistrements.objects.create(
-            classe=classe,
-            seance=derniere_seance,
-            demarre_par=request.user,
-            egress_id=result["egress_id"],
-            url_video=result["filename"],
-            statut='en_cours'
-        )
-        return Response({"status": "started", "egress_id": result["egress_id"], "message": "Enregistrement audio démarré. Chaque partage d'écran sera capté automatiquement dans un fichier séparé."})
+        for job in result["jobs"]:
+            Enregistrements.objects.create(
+                classe=classe,
+                seance=derniere_seance,
+                demarre_par=request.user,
+                egress_id=job["egress_id"],
+                url_video=job["filename"],
+                statut='en_cours'
+            )
+        nb_screens = sum(1 for j in result["jobs"] if j["type"] == "screen")
+        msg = "Enregistrement audio démarré."
+        if nb_screens:
+            msg += f" {nb_screens} partage(s) d'écran déjà actif(s) capté(s) automatiquement."
+        msg += " Tout nouveau partage d'écran sera aussi enregistré automatiquement."
+        return Response({"status": "started", "jobs": result["jobs"], "message": msg})
 
 
 
@@ -191,40 +220,40 @@ def livekit_webhook(request):
             )
         
             if is_screen_share and is_prof and classe:
-                audio_actif = Enregistrements.objects.filter(
-                    classe=classe, statut='en_cours', url_video__startswith='audio_'
-                ).exists()
+                #audio_actif = Enregistrements.objects.filter(
+                #    classe=classe, statut='en_cours', url_video__startswith='audio_'
+                #).exists()
         
-                if audio_actif:
-                    async def _start_screen():
-                        lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
-                        try:
-                            timestamp = int(datetime.now().timestamp())
-                            filename = f"screen_{classe.id}_{timestamp}.webm"
-                            req = api.TrackEgressRequest(
-                                room_name=room_name,
-                                track_id=track.get('sid'),
-                                file=api.DirectFileOutput(filepath=f"/recordings/{filename}")
-                            )
-                            info = await lkapi.egress.start_track_egress(req)
-                            return {"egress_id": info.egress_id, "filename": filename}
-                        finally:
-                            await lkapi.aclose()
-        
+                #if audio_actif:
+                async def _start_screen():
+                    lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
                     try:
-                        result = asyncio.run(_start_screen())
-                        derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-                        Enregistrements.objects.create(
-                            classe=classe,
-                            seance=derniere_seance,
-                            demarre_par=classe.professeur,
-                            egress_id=result["egress_id"],
-                            url_video=result["filename"],
-                            statut='en_cours'
+                        timestamp = int(datetime.now().timestamp())
+                        filename = f"screen_{classe.id}_{timestamp}.webm"
+                        req = api.TrackEgressRequest(
+                            room_name=room_name,
+                            track_id=track.get('sid'),
+                            file=api.DirectFileOutput(filepath=f"/recordings/{filename}")
                         )
-                        print(f"✅ Egress écran démarré : {result['filename']}")
-                    except Exception as e:
-                        print(f"❌ Impossible de démarrer l'egress écran auto: {str(e)}")
+                        info = await lkapi.egress.start_track_egress(req)
+                        return {"egress_id": info.egress_id, "filename": filename}
+                    finally:
+                        await lkapi.aclose()
+    
+                try:
+                    result = asyncio.run(_start_screen())
+                    derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
+                    Enregistrements.objects.create(
+                        classe=classe,
+                        seance=derniere_seance,
+                        demarre_par=classe.professeur,
+                        egress_id=result["egress_id"],
+                        url_video=result["filename"],
+                        statut='en_cours'
+                    )
+                    print(f"✅ Egress écran démarré : {result['filename']}")
+                except Exception as e:
+                    print(f"❌ Impossible de démarrer l'egress écran auto: {str(e)}")
         
             return JsonResponse({'status': 'ok'}, status=200)
 
