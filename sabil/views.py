@@ -362,7 +362,7 @@ def livekit_webhook(request):
                     screens = list(Enregistrements.objects.filter(
                         classe=classe, seance=seance, statut='termine',
                         url_video__startswith='screen_'
-                    ).order_by('created_at'))
+                    ).order_by('started_at'))
 
                     audio_filename = audio.url_video
                     audio_start = audio.created_at
