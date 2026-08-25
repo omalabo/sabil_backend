@@ -285,7 +285,7 @@ def livekit_webhook(request):
                 return JsonResponse({'status': 'ignored'}, status=200)
 
             file_name_only = filename.split('/')[-1] if filename else enregistrement.url_video.split('/')[-1]
-            public_url = f"https://live.sabil-al-ilm.org/recordings/{file_name_only}"
+            public_url = f"https://recordings.sabil-al-ilm.org/{file_name_only}"
             
             print(f"🔗 URL publique générée : {public_url}")
 
