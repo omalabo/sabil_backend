@@ -449,6 +449,10 @@ def livekit_webhook(request):
                     print(f"⚠️ Pas d'audio trouvé pour fusion, room {room_name}")
 
             return JsonResponse({'status': 'ok'}, status=200)
+         
+        print(f"⚠️ Événement ignoré (non géré) : {event}")
+        return JsonResponse({'status': 'ignored', 'event': event}, status=200)
+         
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON payload'}, status=400)
     except Exception as e:
