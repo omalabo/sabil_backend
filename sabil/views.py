@@ -429,12 +429,10 @@ def livekit_webhook(request):
                                     classe=classe,
                                     type_canal='chat_groupe',
                                     type_message='video',
+                                    fichier_url=public_url,
                                     contenu=(
                                         f"🎬 Replay complet du cours disponible\n"
                                         f"📚 Classe : *{classe.nom}*\n\n"
-                                        f"Vidéo avec l'écran partagé synchronisé à l'audio.\n"
-                                        f"🔗 {public_url}\n\n"
-                                        f"⚠️ *Disponible pendant 7 jours.*"
                                     ),
                                     is_systeme=True,
                                 )
