@@ -200,7 +200,7 @@ def livekit_webhook(request):
                         lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
                         try:
                             timestamp = int(datetime.now().timestamp())
-                            filename = f"screen_{classe.id}_{timestamp}.mp4"
+                            filename = f"screen_{classe.id}_{timestamp}.webm"
                             req = api.TrackEgressRequest(
                                 room_name=room_name,
                                 track_id=track.get('sid'),
@@ -217,6 +217,7 @@ def livekit_webhook(request):
                         Enregistrements.objects.create(
                             classe=classe,
                             seance=derniere_seance,
+                            demarre_par=classe.professeur,
                             egress_id=result["egress_id"],
                             url_video=result["filename"],
                             statut='en_cours'
@@ -308,7 +309,7 @@ def livekit_webhook(request):
             
             est_audio = file_name_only.startswith('audio_')
             type_msg = 'audio' if est_audio else 'video'
-            nom_fichier = f"Audio_{enregistrement.classe.nom}.ogg" if est_audio else f"Ecran_{enregistrement.classe.nom}.mp4"
+            nom_fichier = f"Audio_{enregistrement.classe.nom}.ogg" if est_audio else f"Ecran_{enregistrement.classe.nom}.webm"
             
             # ✅ Correction : on définit le titre AVANT la f-string pour éviter le backslash dans les {}
             titre = "🎵 Audio du cours disponible" if est_audio else "🖥️ Extrait d'écran partagé disponible"
@@ -330,7 +331,7 @@ def livekit_webhook(request):
                     nom_original=nom_fichier,
                     nom_stockage=file_name_only,
                     type_fichier=type_msg,
-                    mime_type='audio/ogg' if est_audio else 'video/mp4',
+                    mime_type='audio/ogg' if est_audio else 'video/webm',
                     is_voice_note=est_audio,
                     fichier_local=ContentFile(b"", name=file_name_only) 
                 )
