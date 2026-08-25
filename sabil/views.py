@@ -356,7 +356,7 @@ def livekit_webhook(request):
                 audio = Enregistrements.objects.filter(
                     classe=classe, seance=seance, statut='termine',
                     url_video__startswith='audio_'
-                ).order_by('-created_at').first()
+                ).order_by('-started_at').first()
 
                 if audio:
                     screens = list(Enregistrements.objects.filter(
