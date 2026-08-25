@@ -365,15 +365,15 @@ def livekit_webhook(request):
                     ).order_by('started_at'))
 
                     audio_filename = audio.url_video
-                    audio_start = audio.created_at
+                    audio_start = audio.started_at
                     total_duration = audio.duree_secondes or 0
 
                     segments = []
                     for s in screens:
                         if not s.ended_at:
                             continue
-                        offset = (s.created_at - audio_start).total_seconds()
-                        duration = (s.ended_at - s.created_at).total_seconds()
+                        offset = (s.started_at - audio_start).total_seconds()
+                        duration = (s.ended_at - s.started_at).total_seconds()
                         if offset < 0 or duration <= 0:
                             continue
                         segments.append({
