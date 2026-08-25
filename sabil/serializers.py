@@ -250,7 +250,7 @@ class MessageSerializer(serializers.ModelSerializer):
             # Vérifie si c'est bien un enregistrement LiveKit (préfixe audio_ ou screen_)
             nom_stockage = obj.fichier.nom_stockage
             if nom_stockage.startswith('audio_') or nom_stockage.startswith('screen_'):
-                return f"https://live.sabil-al-ilm.org/recordings/{nom_stockage}"
+                return f"https://recordings.sabil-al-ilm.org/{nom_stockage}"
         
         # Cas 2 : Fichier classique (uploadé via Django)
         # On utilise l'URL par défaut du FileField
@@ -283,7 +283,7 @@ class MessageSerializer(serializers.ModelSerializer):
             if obj.reply_to.type_message in ['audio', 'video'] and fichier_reply.nom_stockage:
                 nom_stockage = fichier_reply.nom_stockage
                 if nom_stockage.startswith('audio_') or nom_stockage.startswith('screen_'):
-                    fichier_url = f"https://live.sabil-al-ilm.org/recordings/{nom_stockage}"
+                    fichier_url = f"https://recordings.sabil-al-ilm.org/{nom_stockage}"
                 elif hasattr(fichier_reply, 'fichier_local') and fichier_reply.fichier_local:
                     try:
                         fichier_url = fichier_reply.fichier_local.url
