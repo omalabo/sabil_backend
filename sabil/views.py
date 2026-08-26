@@ -5033,7 +5033,7 @@ class StartSessionView(APIView):
                 created_at=timezone.now(),
             )
 
-        if user.role == "professeur":
+        if user.role == "professeur" and user.admin_id:
             Notifications.objects.create(
             id=uuid.uuid4(),
             destinataire_id=user.admin_id,
