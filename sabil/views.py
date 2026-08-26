@@ -422,6 +422,17 @@ def livekit_webhook(request):
                                     statut='termine',
                                     duree_secondes=int(total_duration)
                                 )
+
+                                nouveau_fichier = Fichiers.objects.create(
+                                    uploade_par=expediteur,
+                                    classe=classe,
+                                    nom_original=f"Replay_{classe.nom}.mp4",
+                                    nom_stockage=output_filename,
+                                    type_fichier='video',
+                                    mime_type='video/mp4',
+                                    is_voice_note=False,
+                                    fichier_local=ContentFile(b"", name=output_filename)
+                                )
                                 
                                 # 2. Créer le message dans le chat
                                 Messages.objects.create(
@@ -429,11 +440,12 @@ def livekit_webhook(request):
                                     classe=classe,
                                     type_canal='chat_groupe',
                                     type_message='video',
-                                    fichier_url=public_url,
                                     contenu=(
                                         f"🎬 Replay complet du cours disponible\n"
+                                        f"🔗 {public_url}\n\n"
                                         f"📚 Classe : *{classe.nom}*\n\n"
                                     ),
+                                    fichier=nouveau_fichier,
                                     is_systeme=True,
                                 )
                                 print(f"✅ Fusion ffmpeg réussie et message envoyé: {output_filename}")
