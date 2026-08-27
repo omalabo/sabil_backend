@@ -96,21 +96,21 @@ def toggle_recording(request, classe_id):
     async def _run():
         lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
         try:
-            res = await lkapi.egress.list_egress(
-                api.ListEgressRequest(room_name=room_name)
-            )
-            actifs = [e for e in res.items if e.status == api.EgressStatus.EGRESS_ACTIVE]
-            print(f"🔍 DEBUG toggle_recording: room={room_name}, nb_actifs={len(actifs)}")
-            for e in actifs:
-                print(f"   → egress brut: {e}")
-            if actifs:
-                stopped_ids = []
-                for e in actifs:
-                    await lkapi.egress.stop_egress(
-                        api.StopEgressRequest(egress_id=e.egress_id)
-                    )
-                    stopped_ids.append(e.egress_id)
-                return {"action": "stopped", "egress_ids": stopped_ids}
+            #res = await lkapi.egress.list_egress(
+            #    api.ListEgressRequest(room_name=room_name)
+            #)
+            #actifs = [e for e in res.items if e.status == api.EgressStatus.EGRESS_ACTIVE]
+            #print(f"🔍 DEBUG toggle_recording: room={room_name}, nb_actifs={len(actifs)}")
+            #for e in actifs:
+            #    print(f"   → egress brut: {e}")
+            #if actifs:
+            #    stopped_ids = []
+            #    for e in actifs:
+            #        await lkapi.egress.stop_egress(
+            #            api.StopEgressRequest(egress_id=e.egress_id)
+            #        )
+            #        stopped_ids.append(e.egress_id)
+            #    return {"action": "stopped", "egress_ids": stopped_ids}
 
             # ── Démarrer l'audio ──
             timestamp = int(datetime.now().timestamp())
