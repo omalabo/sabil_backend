@@ -79,42 +79,55 @@ import asyncio
 @permission_classes([IsAuthenticated])
 def toggle_recording(request, classe_id):
     classe = get_object_or_404(Classes, id=classe_id)
-    # 1. Récupérer le room_name envoyé par le frontend (VideoRoom.tsx)
-    room_name = request.data.get('room_name')
     
-    # 2. Fallback sécurisé si le frontend ne l'envoie pas (pour rétrocompatibilité)
+    # 1. Récupérer le room_name (envoyé par le frontend ou fallback)
+    room_name = request.data.get('room_name')
     if not room_name:
         today = timezone.now().date()
         derniere_presence = Presences.objects.filter(
             classe=classe, date_seance=today
         ).order_by('-heure_connexion').first()
-        room_name = derniere_presence.jitsi_room_id if derniere_presence else None
-    #room_name = derniere_presence.jitsi_room_id if derniere_presence else None
-        if not room_name:
-            return Response({"error": "Aucune session active trouvée pour cette classe."}, status=400)
+        room_name = derniere_presence.jitsi_room_id if derniere_presence else f"classe_{classe_id}"
 
-    async def _run():
+    # 2. Mode ARRÊT : on arrête UNIQUEMENT les egress_ids envoyés par le frontend
+    egress_ids_to_stop = request.data.get('egress_ids_to_stop', [])
+    
+    if egress_ids_to_stop:
+        async def _stop():
+            lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
+            try:
+                stopped = []
+                for eid in egress_ids_to_stop:
+                    try:
+                        await lkapi.egress.stop_egress(api.StopEgressRequest(egress_id=eid))
+                        stopped.append(eid)
+                        print(f"✅ Arrêt de l'egress {eid} (démarré dans cette session)")
+                    except Exception as err:
+                        print(f"⚠️ Impossible d'arrêter {eid}: {err}")
+                return stopped
+            finally:
+                await lkapi.aclose()
+        
+        try:
+            stopped_ids = asyncio.run(_stop())
+            Enregistrements.objects.filter(
+                egress_id__in=stopped_ids, deleted_at__isnull=True
+            ).update(statut='termine', ended_at=timezone.now())
+            return Response({
+                "status": "stopped",
+                "stopped_ids": stopped_ids,
+                "message": f"Enregistrement arrêté ({len(stopped_ids)} flux)."
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    # 3. Mode DÉMARRAGE : on lance un nouvel enregistrement (sans toucher aux zombies)
+    async def _start():
         lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
         try:
-            #res = await lkapi.egress.list_egress(
-            #    api.ListEgressRequest(room_name=room_name)
-            #)
-            #actifs = [e for e in res.items if e.status == api.EgressStatus.EGRESS_ACTIVE]
-            #print(f"🔍 DEBUG toggle_recording: room={room_name}, nb_actifs={len(actifs)}")
-            #for e in actifs:
-            #    print(f"   → egress brut: {e}")
-            #if actifs:
-            #    stopped_ids = []
-            #    for e in actifs:
-            #        await lkapi.egress.stop_egress(
-            #            api.StopEgressRequest(egress_id=e.egress_id)
-            #        )
-            #        stopped_ids.append(e.egress_id)
-            #    return {"action": "stopped", "egress_ids": stopped_ids}
-
-            # ── Démarrer l'audio ──
+            # Audio
             timestamp = int(datetime.now().timestamp())
-            filename = f"audio_{classe_id}_{timestamp}.ogg"
+            filename = f"audio_{classe.id}_{timestamp}.ogg"
             req_audio = api.RoomCompositeEgressRequest(
                 room_name=room_name,
                 audio_only=True,
@@ -124,18 +137,15 @@ def toggle_recording(request, classe_id):
                 )]
             )
             info_audio = await lkapi.egress.start_room_composite_egress(req_audio)
-
             resultats = [{"type": "audio", "egress_id": info_audio.egress_id, "filename": filename}]
 
-            # ── NOUVEAU : rattraper un écran déjà partagé ──
-            participants = await lkapi.room.list_participants(
-                api.ListParticipantsRequest(room=room_name)
-            )
+            # Écrans déjà partagés
+            participants = await lkapi.room.list_participants(api.ListParticipantsRequest(room=room_name))
             for p in participants.participants:
                 for t in p.tracks:
                     if t.source == api.TrackSource.SCREEN_SHARE:
                         ts = int(datetime.now().timestamp())
-                        screen_filename = f"screen_{classe_id}_{ts}.webm"
+                        screen_filename = f"screen_{classe.id}_{ts}.webm"
                         req_screen = api.TrackEgressRequest(
                             room_name=room_name,
                             track_id=t.sid,
@@ -153,33 +163,33 @@ def toggle_recording(request, classe_id):
             await lkapi.aclose()
 
     try:
-        result = asyncio.run(_run())
+        result = asyncio.run(_start())
     except Exception as e:
         print(f"❌ Erreur LiveKit Egress (classe {classe_id}): {str(e)}")
-        return Response({"error": "Impossible de gérer l'enregistrement.", "details": str(e)}, status=500)
+        return Response({"error": "Impossible de démarrer l'enregistrement.", "details": str(e)}, status=500)
 
-    if result["action"] == "stopped":
-        Enregistrements.objects.filter(
-            egress_id__in=result["egress_ids"], deleted_at__isnull=True
-        ).update(statut='termine', ended_at=timezone.now())
-        return Response({"status": "stopped", "message": "Enregistrement arrêté. Les fichiers seront disponibles sous peu."})
-    else:
-        derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
-        for job in result["jobs"]:
-            Enregistrements.objects.create(
-                classe=classe,
-                seance=derniere_seance,
-                demarre_par=request.user,
-                egress_id=job["egress_id"],
-                url_video=job["filename"],
-                statut='en_cours'
-            )
-        nb_screens = sum(1 for j in result["jobs"] if j["type"] == "screen")
-        msg = "Enregistrement audio démarré."
-        if nb_screens:
-            msg += f" {nb_screens} partage(s) d'écran déjà actif(s) capté(s) automatiquement."
-        msg += " Tout nouveau partage d'écran sera aussi enregistré automatiquement."
-        return Response({"status": "started", "jobs": result["jobs"], "message": msg})
+    # 4. Sauvegarder en BDD
+    derniere_seance = Seances.objects.filter(classe=classe).order_by('-created_at').first()
+    for job in result["jobs"]:
+        Enregistrements.objects.create(
+            classe=classe,
+            seance=derniere_seance,
+            demarre_par=request.user,
+            egress_id=job["egress_id"],
+            url_video=job["filename"],
+            statut='en_cours'
+        )
+    
+    nb_screens = sum(1 for j in result["jobs"] if j["type"] == "screen")
+    msg = "Enregistrement audio démarré."
+    if nb_screens:
+        msg += f" {nb_screens} partage(s) d'écran déjà actif(s) capté(s)."
+    
+    return Response({
+        "status": "started",
+        "jobs": result["jobs"],
+        "message": msg
+    })
 
 
 
