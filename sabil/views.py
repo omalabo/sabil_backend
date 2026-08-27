@@ -100,7 +100,9 @@ def toggle_recording(request, classe_id):
                 api.ListEgressRequest(room_name=room_name)
             )
             actifs = [e for e in res.items if e.status == api.EgressStatus.EGRESS_ACTIVE]
-            print(f"🔍 DEBUG toggle_recording: room={room_name}, nb_actifs={len(actifs)}, details={[(e.egress_id, e.request_type) for e in actifs]}")
+            print(f"🔍 DEBUG toggle_recording: room={room_name}, nb_actifs={len(actifs)}")
+            for e in actifs:
+                print(f"   → egress brut: {e}")
             if actifs:
                 stopped_ids = []
                 for e in actifs:
