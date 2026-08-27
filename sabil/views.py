@@ -88,12 +88,10 @@ def toggle_recording(request, classe_id):
         derniere_presence = Presences.objects.filter(
             classe=classe, date_seance=today
         ).order_by('-heure_connexion').first()
-        room_name = derniere_presence.jitsi_room_id if derniere_presence else f"classe_{classe_id}"
-    
-
+        room_name = derniere_presence.jitsi_room_id if derniere_presence else None
     #room_name = derniere_presence.jitsi_room_id if derniere_presence else None
-    #if not room_name:
-    #    return Response({"error": "Aucune session active trouvée pour cette classe."}, status=400)
+        if not room_name:
+            return Response({"error": "Aucune session active trouvée pour cette classe."}, status=400)
 
     async def _run():
         lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
