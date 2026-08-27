@@ -442,7 +442,6 @@ def livekit_webhook(request):
                                     type_message='video',
                                     contenu=(
                                         f"🎬 Replay complet du cours disponible\n"
-                                        f"🔗 {public_url}\n\n"
                                         f"📚 Classe : *{classe.nom}*\n\n"
                                     ),
                                     fichier=nouveau_fichier,
