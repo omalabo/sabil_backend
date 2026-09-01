@@ -1920,9 +1920,9 @@ class ClassViewSet(viewsets.ModelViewSet):
         if include_deleted != 'true':
             qs = qs.exclude(statut='supprimer')
          
-         statut = self.request.query_params.get('statut')
-         if statut:
-             qs = qs.filter(statut=statut)
+        statut = self.request.query_params.get('statut')
+        if statut:
+            qs = qs.filter(statut=statut)
 
         # 🔥 direction
         professeur_id = self.request.query_params.get('professeur_id')
