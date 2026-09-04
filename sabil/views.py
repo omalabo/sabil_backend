@@ -2288,14 +2288,15 @@ class MessageViewSet(viewsets.ModelViewSet):
         qs = Messages.objects.filter(deleted_at__isnull=True)
         if classe_id:
             qs = qs.filter(classe_id=classe_id)
-             # ✅ Vérifier si message déjà envoyé
-             # ✅ Seulement pour les élèves
+            # ✅ Vérifier si message déjà envoyé
+            # ✅ Seulement pour les élèves
             if user.role == 'eleve':
                 already_exists = Messages.objects.filter(
                     classe_id=classe_id,
-                    type_message='systeme',
-                    contenu__contains=f'WELCOME_{user.id}'
+                    contenu__startswith=f'WELCOME_{user.id}:'
                 ).exists()
+
+                
 
                 if not already_exists:
 
@@ -2307,81 +2308,33 @@ class MessageViewSet(viewsets.ModelViewSet):
                     ).first()
 
                     if direction_user:
-                        Messages.objects.create(
-                            id=uuid.uuid4(),
-                            expediteur=direction_user,
-                            classe=classe,
-                            type_canal='chat_groupe',
-                            type_message='systeme',
-                            contenu=(
-                                f"""
-                                Nous espérons que vous allez bien 
+                        welcome_prefix = f"WELCOME_{user.id}:"
+                        # ✅ Liste complète des images de motivation (7 images au total)
+                        MOTIVATION_IMAGES = [
+                            '/01-bienvenue.jpeg',
+                            '/02-muhammad-ibn-nadr.jpeg',
+                            '/03-jafar-as-sadiq.jpeg',
+                            '/04-shaikh-muqbil.jpeg',
+                            '/05-abou-hourayra.jpeg',
+                            '/06-les-4-questions.jpeg',      # 🆕 Hadith 4 questions
+                            '/07-noter-prenom.jpeg',
+                            '/08-rappel-comportement.png',         # 🆕 Message final
+                        ]
+                        for img_path in MOTIVATION_IMAGES:
+                            Messages.objects.create(
+                                id=uuid.uuid4(),
+                                expediteur=direction_user,
+                                classe=classe,
+                                type_canal='chat_groupe',
+                                type_message='image_motivation',  # ✅ Nouveau type
+                                contenu=f"{welcome_prefix}{img_path}",
+                                is_systeme=True,
+                                fichier=None,
+                                reply_to=None,
+                                created_at=timezone.now(),
+                            )
 
-                                Quelques paroles pleines de sagesse pour se motiver 
-
-                                « Le serviteur ne fera pas un seul pas le jour de la résurrection auprès de son Seigneur sans qu'il ne soit interrogé sur cinq choses : sur son existence : comment l'a t'il passée ? 
-                                sur sa jeunesse : comment l'a-t-il utilisée ?  
-                                ses biens : par quels moyens les a-t-il gagnés et
-                                dans quoi les a-t-il dépensés ? 
-                                son savoir : qu'a-t-il appliqué de ce qu'il a appris ?» 
-                                [voir as-sahiha n.946]
-
-                                Muhammad ibn an-Nadr al-Harithi a dit : 
-                                Le début de la science est le silence, 
-                                puis l’écoute attentive,
-                                puis sa mémorisation,
-                                puis sa mise en pratique,
-                                puis sa transmission.» 
-
-                                Ja’far as-Sadiq a dit : « Le coeur est une terre fertile, la science est sa graine, et la révision est son eau. Si la terre est privée de son eau, la graine se dessèche. »
-
-                                Shaikh Muqbil a dit رحمه الله :
-                                « Ô mes enfants, je jure par Allah que si la science pouvait être versée dans un verre, je la verserais pour vous... »
-
-                                D'après Abou Hourayra :
-                                « Ô Allah, rend profitable ce que tu m'as appris... »
-
-                                Après toutes ces belles paroles 
-                                Baarak Allahou fikoum de noter votre prénom ou kounia 
-
-                                QuAllah vous accorde une science utile et bénéfique آمين
-                                """
-                            ),
-                            is_systeme=True,
-                            fichier=None,
-                            reply_to=None,
-                            created_at=timezone.now(),
-                        )
-
-
-                        # ✅ Message 2
-                        Messages.objects.create(
-                            id=uuid.uuid4(),
-                            expediteur=direction_user,
-                            classe=classe,
-                            type_canal='chat_groupe',
-                            type_message='systeme',
-                            contenu=f"""WELCOME_{user.id}
-
-                            Rappel de début de session sur le comportement 
-
-                            Les Salafs apprenaient le comportement et les politesse 20 ans avant d’apprendre la science. 
-
-                            Il y a beaucoup de professeur qui arrêtent d’enseigner à cause du comportement des élèves.
-
-                            On essaye d'être 10min avant le cours...
-
-                            Mettez une alarme à votre téléphone...
-
-                            L’étudiant se doit d’être en avance sur son professeur.
-
-                            (Suite de ton texte...)
-
-                            QuAllah nous accorde le bon comportement et la sincérité آمين
-                            """,
-                            is_systeme=True,
-                            created_at=timezone.now(),
-                        )
+                       
 
         return qs.select_related('expediteur',
                                 'fichier',
