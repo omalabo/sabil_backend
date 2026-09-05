@@ -2012,13 +2012,6 @@ class InscriptionViewSet(viewsets.ModelViewSet):
         if classe_id:
             qs = qs.filter(classe_id=classe_id)
     
-            # 🔍 Récupère le professeur de cette classe pour connaître son genre
-            classe = Classes.objects.select_related('professeur').filter(id=classe_id).first()
-    
-            if classe and classe.professeur and classe.professeur.homme_femme:
-                genre_prof = classe.professeur.homme_femme
-                qs = qs.filter(eleve__homme_femme=genre_prof)
-    
         return qs.select_related('eleve')  # ✅ Optimisation N+1
 
     def perform_create(self, serializer):
