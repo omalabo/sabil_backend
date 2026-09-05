@@ -2304,14 +2304,14 @@ class MessageViewSet(viewsets.ModelViewSet):
                         welcome_prefix = f"WELCOME_{user.id}:"
                         # ✅ Liste complète des images de motivation (7 images au total)
                         MOTIVATION_IMAGES = [
-                            './01-bienvenue.jpeg',
-                            './02-muhammad-ibn-nadr.jpeg',
-                            './03-jafar-as-sadiq.jpeg',
-                            './04-shaikh-muqbil.jpeg',
-                            './05-abou-hourayra.jpeg',
-                            './06-les-4-questions.jpeg',      # 🆕 Hadith 4 questions
-                            './07-noter-prenom.jpeg',
-                            './08-rappel-comportement.png',         # 🆕 Message final
+                            '/01-bienvenue.jpeg',
+                            '/02-muhammad-ibn-nadr.jpeg',
+                            '/03-jafar-as-sadiq.jpeg',
+                            '/04-shaikh-muqbil.jpeg',
+                            '/05-abou-hourayra.jpeg',
+                            '/06-les-4-questions.jpeg',      # 🆕 Hadith 4 questions
+                            '/07-noter-prenom.jpeg',
+                            '/08-rappel-comportement.png',         # 🆕 Message final
                         ]
                         for img_path in MOTIVATION_IMAGES:
                             Messages.objects.create(
