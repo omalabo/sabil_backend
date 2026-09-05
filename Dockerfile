@@ -26,7 +26,7 @@ COPY . .
 
 # Collecter les fichiers statiques pour la production
 RUN python manage.py collectstatic --noinput
-
+RUN mkdir -p /app/media && chmod -R 755 /app/media
 # Exposer le port 8000
 EXPOSE 8000
 
