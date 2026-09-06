@@ -2302,30 +2302,26 @@ class MessageViewSet(viewsets.ModelViewSet):
 
                     if direction_user:
                         welcome_prefix = f"WELCOME_{user.id}:"
-                        # ✅ Liste complète des images de motivation (7 images au total)
-                        MOTIVATION_IMAGES = [
-                            '/01-bienvenue.jpeg',
-                            '/02-muhammad-ibn-nadr.jpeg',
-                            '/03-jafar-as-sadiq.jpeg',
-                            '/04-shaikh-muqbil.jpeg',
-                            '/05-abou-hourayra.jpeg',
-                            '/06-les-4-questions.jpeg',      # 🆕 Hadith 4 questions
-                            '/07-noter-prenom.jpeg',
-                            '/08-rappel-comportement.png',         # 🆕 Message final
+                        
+                        MOTIVATION_TAGS = [
+                            'img1', 'img2', 'img3', 'img4', 
+                            'img5', 'img6', 'img7', 'img8'
                         ]
-                        for img_path in MOTIVATION_IMAGES:
-                            Messages.objects.create(
-                                id=uuid.uuid4(),
-                                expediteur=direction_user,
-                                classe=classe,
-                                type_canal='chat_groupe',
-                                type_message='image_motivation',  # ✅ Nouveau type
-                                contenu=f"{welcome_prefix}{img_path}",
-                                is_systeme=True,
-                                fichier=None,
-                                reply_to=None,
-                                created_at=timezone.now(),
-                            )
+                     
+                        for tag in MOTIVATION_TAGS:
+                         Messages.objects.create(
+                             id=uuid.uuid4(),
+                             expediteur=direction_user,
+                             classe=classe,
+                             type_canal='chat_groupe',
+                             type_message='image_motivation',
+                             # ✅ Le contenu ressemble maintenant à : "WELCOME_123:img4"
+                             contenu=f"WELCOME_{user.id}:{tag}", 
+                             is_systeme=True,
+                             fichier=None,
+                             reply_to=None,
+                             created_at=timezone.now(),
+                         )
 
                        
 
