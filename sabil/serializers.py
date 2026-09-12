@@ -215,6 +215,9 @@ class MessageSerializer(serializers.ModelSerializer):
     reply_to_preview = serializers.SerializerMethodField(read_only=True)
     recu_par = serializers.ListField(read_only=True, default=list)
     lu_par_ids = serializers.ListField(read_only=True, default=list)
+    # 🆕 NOUVEAUX champs additifs — n'existaient pas avant, ne cassent rien
+    recu_par_detail = serializers.SerializerMethodField(read_only=True)
+    lu_par_detail = serializers.SerializerMethodField(read_only=True)
     
     classe = serializers.PrimaryKeyRelatedField(
         queryset=Classes.objects.all(),
@@ -231,8 +234,25 @@ class MessageSerializer(serializers.ModelSerializer):
             'fichier_expires_at', 'is_voice_note',
             'fichier',  # <--- TRÈS IMPORTANT
             'reply_to_preview',
-            'fichier_url',  # ✅ AJOUT : fichier_url est aussi en lecture seule
+            'fichier_url',  'recu_par_detail', 'lu_par_detail',
         ]
+
+    # ── Résolution des IDs en noms, via le cache injecté dans le context ──
+    def _resolve_users(self, user_ids):
+        if not user_ids:
+            return []
+        users_map = self.context.get('users_map', {})
+        return [
+            {'id': str(uid), 'display_name': users_map.get(str(uid), 'Utilisateur')}
+            for uid in user_ids
+        ]
+
+    def get_recu_par_detail(self, obj):
+        return self._resolve_users(obj.recu_par or [])
+
+    def get_lu_par_detail(self, obj):
+        return self._resolve_users(obj.lu_par_ids or [])
+        
 
     # ✅ NOUVELLE MÉTHODE : Gère dynamiquement l'URL du fichier
     def get_fichier_url(self, obj):
