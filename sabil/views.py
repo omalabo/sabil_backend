@@ -5082,6 +5082,15 @@ class StartSessionView(APIView):
                 created_at=timezone.now(),
             )
 
+            # ✅ ACTION 2 : PUSH NOTIFICATION DIRECTION
+            if direction.expo_push_token:
+                send_expo_push_notification(
+                    direction.expo_push_token,
+                    "🔴 Cours démarré",
+                    f"Salle ouverte pour {classe.nom}",
+                    "/direction/planning-global"
+                )
+
         if user.role == "professeur" and user.admin_id:
             Notifications.objects.create(
             id=uuid.uuid4(),
@@ -5092,20 +5101,46 @@ class StartSessionView(APIView):
             lu=False,
             classe=classe,
             created_at=timezone.now(),)
-
-            inscriptions = Inscriptions.objects.filter(classe=classe)
-            notifications = [
-                Notifications(
-                    destinataire=inscription.eleve,
-                    type='cours_demarrer',
-                    titre='Cours démarré',
-                    classe=seance.classe,
-                    contenu=f'Salle ouverte pour {classe.nom}',
-                    lu=False,
-                    created_at=timezone.now(),
+         
+            # ✅ ACTION 2 : PUSH NOTIFICATION ADMIN
+            admin = Users.objects.filter(id=user.admin_id).first()
+            if admin and admin.expo_push_token:
+                send_expo_push_notification(
+                    admin.expo_push_token,
+                    "🔴 Cours démarré",
+                    f"Salle ouverte pour {classe.nom}",
+                    "/admin/classes"
                 )
-                for inscription in inscriptions
-            ]
+
+        # Notifications pour les élèves
+        inscriptions = Inscriptions.objects.filter(classe=classe)
+        notifications_list = [
+            Notifications(
+                id=uuid.uuid4(),
+                destinataire=inscription.eleve,
+                type='cours_demarrer',
+                titre='Cours démarré',
+                classe=classe, # ✅ Corrigé : on utilise 'classe' et non 'seance.classe'
+                contenu=f'Salle ouverte pour {classe.nom}',
+                lu=False,
+                created_at=timezone.now(),
+            )
+            for inscription in inscriptions
+        ]
+        Notifications.objects.bulk_create(notifications_list)
+
+        # ✅ ACTION 2 : PUSH NOTIFICATIONS ÉLÈVES
+        for inscription in inscriptions:
+            eleve = inscription.eleve
+            if eleve.expo_push_token:
+                send_expo_push_notification(
+                    eleve.expo_push_token,
+                    "🔴 Votre cours commence",
+                    f"La salle pour {classe.nom} est ouverte",
+                    "/eleve/classes"
+                )
+
+            
          
 
         # ── 7. Token LiveKit ───────────────────────────────────────────────
