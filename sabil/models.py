@@ -699,7 +699,7 @@ class TacheDirectionAssignee(models.Model):
 class Users(AbstractBaseUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, max_length=255)
-    
+    expo_push_token = models.CharField(max_length=255, blank=True, null=True, help_text="Token pour les notifications push mobiles")
     password = models.CharField(max_length=255, db_column='password_hash')
     
     display_name = models.CharField(max_length=150, blank=True, null=True)
