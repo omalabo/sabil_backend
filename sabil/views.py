@@ -471,7 +471,41 @@ def livekit_webhook(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
-     
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def save_expo_token_view(request):
+    """Reçoit le token du mobile et le sauvegarde pour l'utilisateur connecté"""
+    token = request.data.get('expo_token')
+    if token:
+        request.user.expo_push_token = token
+        request.user.save(update_fields=['expo_push_token'])
+        return Response({'status': 'ok', 'message': 'Token sauvegardé'})
+    return Response({'status': 'error'}, status=400)
+
+
+# 1. La fonction utilitaire (à mettre en haut de views.py ou dans un fichier utils.py)
+def send_expo_push_notification(expo_token: str, title: str, body: str, target_url: str):
+    message = {
+        "to": expo_token,
+        "sound": "default",
+        "title": title,
+        "body": body,
+        "data": {
+            "url": target_url  # C'est cette URL que la WebView va ouvrir au clic
+        }
+    }
+    try:
+        requests.post(
+            "https://exp.host/--/api/v2/push/send",
+            json=message,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            timeout=5 # Important pour ne pas bloquer ta vue Django si Expo est lent
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"Erreur envoi notification Expo: {e}")
 
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
