@@ -81,6 +81,8 @@ urlpatterns = [
     path('livekit/webhook/', views.livekit_webhook, name='livekit_webhook'),
     
     path('classes/<uuid:classe_id>/eleves/', views.ElevesByClasseView.as_view(), name='classe-eleves'),
+
+    path('auth/save-expo-token/', views.save_expo_token_view, name='save-expo-token'),
     # Authentification & Mot de passe
     path('auth/login/', views.CustomLoginView.as_view(), name='login'),
     path('auth/logout/', views.LogoutView.as_view(), name='logout'),
