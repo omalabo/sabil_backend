@@ -1221,6 +1221,27 @@ class PlanningViewSet(viewsets.ModelViewSet):
         ]
         
         Notifications.objects.bulk_create(notifications)
+
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "📅 Changement de planning", msg, "/direction/planning-global")
+
+        inscriptions = Inscriptions.objects.filter(classe=seance.classe)
+        notifications = [
+            Notifications(
+                destinataire=inscription.eleve, type='changement_creneau',
+                titre='Changement de créneau', classe=seance.classe, contenu=msg, lu=False
+            )
+            for inscription in inscriptions
+        ]
+        Notifications.objects.bulk_create(notifications)
+        
+        # ✅ PUSH ÉLÈVES
+        for inscription in inscriptions:
+            if inscription.eleve.expo_push_token:
+                send_expo_push_notification(
+                    inscription.eleve.expo_push_token, "📅 Changement de planning", 
+                    f"Changement de créneau pour {seance.classe.nom}", "/eleve/classes"
+                )
  
         return Response({
             'id':                    str(seance.id),
@@ -1562,6 +1583,10 @@ class SignalerAbsenceView(APIView):
         direction = Users.objects.get(role='direction', is_active=True)
         Notifications.objects.create(destinataire=direction, type='absence_prof', titre='absence signalee', contenu=msg, lu=False)
 
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "⚠️ Absence professeur", msg, "/direction/planning-global")
+            
+
         return Response(AbsenceSignalerSerializer(absence).data, status=201)
 
 
@@ -1769,7 +1794,9 @@ class UserViewSet(viewsets.ModelViewSet):
             msg = f"Nouveau compte: {user.display_name} ajouter "
             Notifications.objects.create(destinataire=user, type='nouveau_user', titre='Nouveau compte', contenu=msg, lu=False)
 
-      
+            if user.expo_push_token:
+                send_expo_push_notification(user.expo_push_token, "👤 Bienvenue", msg_user, "/login")
+                
             return Response({
                 'message': 'Compte créé. Mot de passe : sabil',
                 'user_id': str(user.id)
@@ -2044,6 +2071,11 @@ class ClassViewSet(viewsets.ModelViewSet):
 
         msg = f"Ajout de la classe {generated_name}"
         Notifications.objects.create(destinataire=professeur, type='nouvelle_classe', titre='ajout classe', contenu=msg, lu=False)
+
+        
+        # ✅ PUSH PROFESSEUR
+        if professeur.expo_push_token:
+            send_expo_push_notification(professeur.expo_push_token, "🏫 Nouvelle classe", msg, "/professeur/cours")
 
 
 class InscriptionViewSet(viewsets.ModelViewSet):
@@ -3209,6 +3241,17 @@ class DevoirViewSet(viewsets.ModelViewSet):
                 classe=devoir.seance.classe,
                 created_at=timezone.now(),
             )
+
+            # ✅ PUSH PROF
+            if prof.expo_push_token:
+                send_expo_push_notification(prof.expo_push_token, "📝 Nouveau Devoir", "Vous avez créé un nouveau devoir", "/professeur/cours")
+                
+            direction = Users.objects.get(role='direction', is_active=True)
+            Notifications.objects.create(destinataire=direction, type='nouveau_devoir', titre='Nouveau Devoir', contenu='Nouveau Devoir créé', lu=False, classe=devoir.seance.classe, created_at=timezone.now())
+            # ✅ PUSH DIRECTION
+            if direction.expo_push_token:
+                send_expo_push_notification(direction.expo_push_token, "📝 Nouveau Devoir", f"Un nouveau devoir a été créé pour {devoir.seance.classe.nom}", "/direction/classes")
+                
             
             inscriptions = Inscriptions.objects.filter(classe=devoir.seance.classe)
             
@@ -3224,6 +3267,12 @@ class DevoirViewSet(viewsets.ModelViewSet):
                 )
                 for inscription in inscriptions
             ]
+            Notifications.objects.bulk_create(notifications)
+        
+            # ✅ PUSH ÉLÈVES
+            for inscription in inscriptions:
+                if inscription.eleve.expo_push_token:
+                    send_expo_push_notification(inscription.eleve.expo_push_token, "📝 Nouveau Devoir", f"Un nouveau devoir a été publié pour {devoir.seance.classe.nom}", "/eleve/classes")
 
     # ─────────────────────────────────────────────────────────────────────
     # 🔼 UPLOAD FICHIERS PROF (multipart, multiple)
@@ -3988,6 +4037,11 @@ class FactureEmiseViewSet(viewsets.ModelViewSet):
         
         Notifications.objects.create(destinataire=direction, type='new_facture_emise', titre='Nouvelle facture emise', contenu=msg, lu=False)
 
+        # ✅ PUSH DIRECTION
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "💰 Nouvelle facture", msg, "/direction/classes")
+            
+
 
         return Response(
             FactureSerializer(facture).data,
@@ -4648,11 +4702,23 @@ class FactureEleveViewSet(viewsets.ReadOnlyModelViewSet):
 
         msg = f"Confirmation de payement de facture par professeur {facture_eleve.facture.professeur}"
         Notifications.objects.create(destinataire=facture_eleve.eleve, type='facture_confirmee', classe=facture_eleve.presence.classe, titre='Facture confirmee', contenu=msg, lu=False)
-
+        if facture_eleve.eleve.expo_push_token:
+            send_expo_push_notification(
+                facture_eleve.eleve.expo_push_token, 
+                "✅ Facture confirmée", 
+                f"Votre paiement pour {facture_eleve.presence.classe.nom} a été confirmé.", 
+                "/eleve/factures"
+            )
 
         direction = Users.objects.get(role='direction', is_active=True)
         Notifications.objects.create(destinataire=direction, type='facture_confirmee',classe=facture_eleve.presence.classe, titre='Facture confirmee', contenu=msg, lu=False)
-
+        if direction.expo_push_token:
+            send_expo_push_notification(
+                direction.expo_push_token, 
+                "✅ Facture confirmée", 
+                msg, 
+                "/direction/classes"
+            )
  
         return Response(
             FactureEleveListSerializer(facture_eleve).data,
@@ -4696,8 +4762,14 @@ class FactureEleveViewSet(viewsets.ReadOnlyModelViewSet):
     
         today = timezone.now().date()
         msg = f" Confirmation de payement de facture par professeur {request.user.display_name}"
-        Notifications.objects.create(destinataire=facture_eleve.presence.classe.eleve, type='facture_confirmee', classe=facture_eleve.presence.classe, titre='Facture confirmee', contenu=msg, lu=False)
-
+        
+        # ✅ CORRECTION : Utilisation de 'direction' au lieu de l'objet undefined 'facture_eleve'
+        Notifications.objects.create(destinataire=direction, type='facture_confirmee', classe=facture.classe, titre='Facture confirmée', contenu=msg, lu=False)
+        
+        # ✅ PUSH DIRECTION
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "✅ Paiements confirmés", msg, "/direction/classes")
+            
         return Response({
             'detail': f'{count} paiement(s) confirmé(s).',
             'count': count,
@@ -4723,7 +4795,10 @@ class FactureEleveViewSet(viewsets.ReadOnlyModelViewSet):
 
         direction = Users.objects.get(role='direction', is_active=True)
         Notifications.objects.create(destinataire=direction, type='facture_totalement_payee',classe=facture.classe, titre='Facture totalement payee', contenu=msg, lu=False)
-
+        
+        # ✅ PUSH DIRECTION
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "💰 Facture soldée", msg, "/direction/classes")
  
 
 class AdminElevesAPayerView(APIView):
@@ -5262,6 +5337,11 @@ class PauseClassView(APIView):
         msg = f"Classe {classe.nom}  mis en pause"
         Notifications.objects.create(destinataire=direction, type='classe_mise_en_pause', classe=classe, titre='Classe mis en pause', contenu=msg, lu=False)
 
+        # ✅ PUSH DIRECTION
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "⏸️ Classe en pause", msg, "/direction/classes")
+
+     
         return Response({'message': 'Classe mise en pause.'})
 
 
@@ -5283,6 +5363,10 @@ class FlagDeleteClassView(APIView):
         direction = Users.objects.get(role='direction', is_active=True)
         msg = f"Classe {classe.nom}  a supprimer"
         Notifications.objects.create(destinataire=direction, type='classe_a_supprimer', classe=classe, titre='Classe à supprimer signalée', contenu=msg, lu=False)
+        # ✅ PUSH DIRECTION
+        if direction.expo_push_token:
+            send_expo_push_notification(direction.expo_push_token, "🗑️ Suppression demandée", msg, "/direction/classes")
+            
         return Response({'message': 'Classe signalée pour suppression.'})
 
 class ReactivateClassView(APIView):
@@ -5337,6 +5421,11 @@ class SubmitPreClassCheckView(APIView):
                     destinataire=classe.admin, type='alert_prof', titre='Alerte Professeur', 
                     contenu=f'Élève {request.user.display_name} signale absence/retard prof pour {classe.nom}', lu=False
                 )
+
+                # ✅ PUSH ADMIN
+                if classe.admin.expo_push_token:
+                    send_expo_push_notification(classe.admin.expo_push_token, "⚠️ Alerte Professeur", msg, "/admin/classes")
+                    
             # Enregistrement absence prof
             if prof_absent:
                 AbsencesProfs.objects.create(
@@ -5366,6 +5455,10 @@ class SyncPlanningFromClassView(APIView):
         # Notif direction couleur rose
         for dir_user in Users.objects.filter(role='direction'):
             Notifications.objects.create(destinataire=dir_user, type='planning_update', titre='Planning mis à jour', contenu='Nouveaux créneaux importés. Case rose si non lu.', lu=False)
+            # ✅ PUSH DIRECTION
+            if dir_user.expo_push_token:
+                send_expo_push_notification(dir_user.expo_push_token, "📅 Planning mis à jour", msg, "/direction/planning-global")
+                
         return Response({'message': 'Planning synchronisé.'})
 
 class TogglePlanningSlotView(APIView):
