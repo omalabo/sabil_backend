@@ -1779,6 +1779,11 @@ class UserViewSet(viewsets.ModelViewSet):
                     msg = f"Nouveau compte: {parent.display_name} ajouter "
                     Notifications.objects.create(destinataire=parent, type='nouveau_user', titre='Nouveau compte', contenu=msg, lu=False)
 
+                    # ✅ AJOUT : Push pour le parent (redirection vers login car pas de dashboard parent dédié dans App.tsx)
+                    if parent.expo_push_token:
+                        send_expo_push_notification(parent.expo_push_token, "Nouveau compte", msg_parent, "/login")
+
+
                 
 
             LogsActivite.objects.create(
@@ -1795,7 +1800,10 @@ class UserViewSet(viewsets.ModelViewSet):
             Notifications.objects.create(destinataire=user, type='nouveau_user', titre='Nouveau compte', contenu=msg, lu=False)
 
             if user.expo_push_token:
-                send_expo_push_notification(user.expo_push_token, "👤 Bienvenue", msg_user, "/login")
+                # On le dirige vers son dashboard selon son rôle
+                target = "/eleve/dashboard" if user.role == 'eleve' else ("/professeur/dashboard" if user.role == 'professeur' else "/admin/dashboard")
+                send_expo_push_notification(user.expo_push_token, " Bienvenue", msg_user, target)
+
                 
             return Response({
                 'message': 'Compte créé. Mot de passe : sabil',
@@ -4707,7 +4715,7 @@ class FactureEleveViewSet(viewsets.ReadOnlyModelViewSet):
                 facture_eleve.eleve.expo_push_token, 
                 "✅ Facture confirmée", 
                 f"Votre paiement pour {facture_eleve.presence.classe.nom} a été confirmé.", 
-                "/eleve/factures"
+                "/eleve/factures"  # ✅ Validé dans App.tsx
             )
 
         direction = Users.objects.get(role='direction', is_active=True)
@@ -4717,7 +4725,7 @@ class FactureEleveViewSet(viewsets.ReadOnlyModelViewSet):
                 direction.expo_push_token, 
                 "✅ Facture confirmée", 
                 msg, 
-                "/direction/classes"
+                "/direction/classes"  # ✅ Validé dans App.tsx
             )
  
         return Response(
@@ -4734,41 +4742,72 @@ class FactureEleveViewSet(viewsets.ReadOnlyModelViewSet):
     def confirmer_tout(self, request):
         """
         Payload : { facture_id: "uuid" }
-        Confirme tous les FactureEleve dont statut = 'payee'
-        pour la facture donnée.
+        Confirme tous les FactureEleve dont statut = 'payee' pour la facture donnée.
         """
         if request.user.role != 'professeur':
             return Response({'error': 'Seul le professeur peut confirmer.'}, status=403)
-    
+            
         facture_id = request.data.get('facture_id')
         if not facture_id:
             return Response({'error': 'facture_id requis.'}, status=400)
-    
+            
         try:
             facture = Factures.objects.get(id=facture_id, professeur=request.user)
         except Factures.DoesNotExist:
             return Response({'error': 'Facture introuvable.'}, status=404)
-    
-        # Confirmer tous les payés (montant_payer >= montant_a_payer)
-        a_confirmer = FactureEleve.objects.filter(
-            facture=facture,
-            statut='payee',
-        )
-        count = a_confirmer.count()
-        a_confirmer.update(statut='confirmee')
-    
-        # Vérifier si toutes sont confirmées → facture payée
+            
+        # 1. Récupérer les factures élèves concernées AVANT la mise à jour
+        a_confirmer_qs = FactureEleve.objects.filter(facture=facture, statut='payee')
+        count = a_confirmer_qs.count()
+        
+        # 2. Mise à jour en lot
+        a_confirmer_qs.update(statut='confirmee')
+        
+        # 3. Vérifier si la facture globale est totalement payée
         self._check_and_update_facture_statut(facture)
-    
-        today = timezone.now().date()
-        msg = f" Confirmation de payement de facture par professeur {request.user.display_name}"
         
-        # ✅ CORRECTION : Utilisation de 'direction' au lieu de l'objet undefined 'facture_eleve'
-        Notifications.objects.create(destinataire=direction, type='facture_confirmee', classe=facture.classe, titre='Facture confirmée', contenu=msg, lu=False)
+        msg_lot = f"Confirmation de paiement en lot par le professeur {request.user.display_name}"
+        direction = Users.objects.get(role='direction', is_active=True)
         
-        # ✅ PUSH DIRECTION
+        # ── A. Notification & Push pour la DIRECTION (action de lot) ──
+        Notifications.objects.create(
+            destinataire=direction, 
+            type='facture_confirmee', 
+            classe=facture.classe, 
+            titre='Paiements confirmés (lot)', 
+            contenu=msg_lot, 
+            lu=False
+        )
         if direction.expo_push_token:
-            send_expo_push_notification(direction.expo_push_token, "✅ Paiements confirmés", msg, "/direction/classes")
+            send_expo_push_notification(
+                direction.expo_push_token, 
+                "✅ Paiements confirmés", 
+                msg_lot, 
+                "/direction/classes"  # ✅ Validé dans App.tsx
+            )
+            
+        # ── B. Notification & Push pour les ÉLÈVES concernés ──
+        # On recharge le queryset avec select_related pour accéder à l'objet 'eleve'
+        eleves_confirmes = FactureEleve.objects.filter(facture=facture, statut='confirmee').select_related('eleve')
+        
+        for fe in eleves_confirmes:
+            if fe.eleve and fe.eleve.expo_push_token:
+                msg_eleve = f"Votre paiement pour {facture.classe.nom} a été confirmé par le professeur."
+                
+                Notifications.objects.create(
+                    destinataire=fe.eleve,
+                    type='facture_confirmee',
+                    classe=facture.classe,
+                    titre='Facture confirmée',
+                    contenu=msg_eleve,
+                    lu=False
+                )
+                send_expo_push_notification(
+                    fe.eleve.expo_push_token, 
+                    "✅ Facture confirmée", 
+                    msg_eleve, 
+                    "/eleve/factures"  # ✅ Validé dans App.tsx
+                )
             
         return Response({
             'detail': f'{count} paiement(s) confirmé(s).',
