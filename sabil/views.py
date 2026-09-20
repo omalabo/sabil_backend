@@ -67,6 +67,7 @@ from django.views.decorators.csrf import csrf_exempt
 from livekit.api import TokenVerifier, WebhookReceiver
 from sabil.authentication import LiveKitWebhookAuthentication
 from rest_framework.permissions import AllowAny
+import requests
 
 # ... (tes constantes LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
 
