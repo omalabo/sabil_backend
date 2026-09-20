@@ -2520,7 +2520,7 @@ class MessageViewSet(viewsets.ModelViewSet):
                     destinataire=inscription.eleve,
                     type='new_message_chat_classe',
                     titre='Nouveau message de groupe',
-                    classe=seance.classe,
+                    classe=classe,
                     contenu=msg,
                     lu=False
                 )
