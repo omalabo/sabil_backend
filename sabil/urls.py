@@ -70,6 +70,7 @@ router.register(r'absences', views.AbsenceSignalerViewSet, basename='absences')
 router.register(r'admin/prof-facture-presences', views.AdminFacturePresenceViewSet, basename='admin-facture-presences')
 router.register(r'admin/factures', views.AdminFactureEmiseViewSet, basename='admin-factures')
 router.register(r'taches-direction', views.TacheDirectionViewSet, basename='taches-direction')
+router.register(r'livres-classe', views.LivreClasseViewSet, basename='livres-classe')
 
 urlpatterns = [
     # urls.py
