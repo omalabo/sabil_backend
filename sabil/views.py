@@ -508,6 +508,166 @@ def send_expo_push_notification(expo_token: str, title: str, body: str, target_u
     except requests.exceptions.RequestException as e:
         print(f"Erreur envoi notification Expo: {e}")
 
+
+class LivreClasseViewSet(viewsets.ModelViewSet):
+    serializer_class = LivreClasseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = LivreClasse.objects.all().order_by('-created_at')
+        classe_id = self.request.query_params.get('classe_id')
+        if classe_id:
+            qs = qs.filter(classe_id=classe_id)
+        return qs
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['request'] = self.request
+        return ctx
+
+    def perform_create(self, serializer):
+        fichier = self.request.FILES.get('fichier_local')
+        if not fichier:
+            raise serializers.ValidationError({'fichier_local': 'Fichier requis.'})
+        ext = (fichier.name.rsplit('.', 1)[-1] if '.' in fichier.name else '').lower()
+        type_fichier = 'pdf' if ext == 'pdf' else 'docx' if ext in ('doc', 'docx') else 'image'
+        serializer.save(
+            id=uuid.uuid4(),
+            professeur=self.request.user,
+            nom_original=fichier.name,
+            mime_type=getattr(fichier, 'content_type', None),
+            taille_bytes=fichier.size,
+            type_fichier=type_fichier,
+            created_at=timezone.now(),
+        )
+
+    def perform_destroy(self, instance):
+        # Seul le prof qui l'a uploadé (ou admin/direction) peut supprimer
+        if instance.professeur_id != self.request.user.id and self.request.user.role not in ('admin', 'direction'):
+            raise serializers.ValidationError('Non autorisé.')
+        instance.fichier_local.delete(save=False)
+        instance.delete()
+
+
+class BroadcastConsumer(AsyncWebsocketConsumer):
+    """
+    Consumer générique de rediffusion, utilisé pour :
+      - channel = 'partage'  → qui partage quel onglet (Tableau / Éditeur)
+      - channel = 'editeur'  → contenu du document Tiptap en direct
+    Même mécanisme d'auth et d'accès que TableauConsumer.
+    """
+
+    async def connect(self):
+        self.channel_key = self.scope['url_route']['kwargs']['channel']   # 'partage' | 'editeur'
+        self.classe_id = self.scope['url_route']['kwargs']['classe_id']
+        self.seance_id = self.scope['url_route']['kwargs']['seance_id']
+
+        # ── Token depuis l'URL ────────────────────────────────────────
+        query_string = self.scope.get('query_string', b'').decode()
+        token = None
+        for part in query_string.split('&'):
+            if part.startswith('token='):
+                token = part.split('=', 1)[1]
+                break
+
+        if not token:
+            await self.close(code=4001)
+            return
+
+        self.user = await self.get_user_from_token(token)
+        if not self.user:
+            await self.close(code=4001)
+            return
+
+        if not await self.check_access():
+            await self.close(code=4003)
+            return
+
+        self.group_name = f"session_{self.channel_key}_{self.classe_id}_{self.seance_id}"
+        self.cache_key = f"session_state_{self.group_name}"
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+
+        event_type = data.get('type')
+
+        # ── Un client qui vient d'ouvrir l'onglet demande l'état courant ──
+        if event_type == 'request_state':
+            state = cache.get(self.cache_key)
+            if state:
+                await self.send(text_data=json.dumps(state))
+            return
+
+        # ── On mémorise le dernier état utile selon le canal ──────────
+        if self.channel_key == 'editeur' and event_type == 'editor_content':
+            cache.set(self.cache_key, data, timeout=60 * 60 * 8)
+
+        elif self.channel_key == 'partage':
+            if event_type == 'share_start':
+                cache.set(self.cache_key, data, timeout=60 * 60 * 8)
+            elif event_type == 'share_stop':
+                cache.delete(self.cache_key)
+
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                'type': 'broadcast_event',
+                'data': data,
+                'sender_channel': self.channel_name,
+            }
+        )
+
+    async def broadcast_event(self, event):
+        # On ne renvoie jamais à l'émetteur lui-même
+        if event.get('sender_channel') == self.channel_name:
+            return
+        await self.send(text_data=json.dumps(event['data']))
+
+    @database_sync_to_async
+    def get_user_from_token(self, token):
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            access_token = AccessToken(token)
+            user_id = access_token['user_id']
+            return User.objects.get(id=user_id)
+        except Exception as e:
+            print(f"Token invalide : {e}")
+            return None
+
+    @database_sync_to_async
+    def check_access(self):
+        try:
+            from .models import Classes, Inscriptions
+
+            if not self.user or not hasattr(self.user, "id"):
+                return False
+
+            classe = Classes.objects.get(id=self.classe_id)
+
+            if classe.professeur_id == self.user.id:
+                return True
+
+            return Inscriptions.objects.filter(
+                classe_id=self.classe_id,
+                eleve_id=self.user.id,
+            ).exists()
+
+        except Exception as e:
+            print(f"Erreur check_access: {e}")
+            return False
+         
+     
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
 # ─────────────────────────────────────────────
