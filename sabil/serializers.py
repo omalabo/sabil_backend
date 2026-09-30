@@ -374,6 +374,30 @@ class NotificationSerializer(serializers.ModelSerializer):
 # ================= PÉDAGOGIE & SUIVI =================
 # serializers.py
 
+
+class LivreClasseSerializer(serializers.ModelSerializer):
+    professeur_nom = serializers.CharField(source='professeur.display_name', read_only=True)
+    fichier_url = serializers.SerializerMethodField()
+    taille_ko = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LivreClasse
+        fields = [
+            'id', 'classe', 'professeur', 'professeur_nom',
+            'titre', 'nom_original', 'fichier_url', 'type_fichier',
+            'mime_type', 'taille_ko', 'created_at',
+        ]
+        read_only_fields = ['id', 'professeur', 'nom_original', 'type_fichier', 'mime_type', 'created_at']
+
+    def get_fichier_url(self, obj):
+        if not obj.fichier_local:
+            return None
+        request = self.context.get('request')
+        url = obj.fichier_local.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_taille_ko(self, obj):
+        return round(obj.taille_bytes / 1024) if obj.taille_bytes else None
 class FichierDevoirSerializer(serializers.ModelSerializer):
     fichier_url = serializers.SerializerMethodField()
     
