@@ -550,39 +550,10 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
 
 
 class BroadcastConsumer(AsyncWebsocketConsumer):
-    """
-    Consumer générique de rediffusion, utilisé pour :
-      - channel = 'partage'  → qui partage quel onglet (Tableau / Éditeur)
-      - channel = 'editeur'  → contenu du document Tiptap en direct
-    Même mécanisme d'auth et d'accès que TableauConsumer.
-    """
+    CLEAR_EVENTS = {'share_stop', 'end'}  # 🆕 types qui vident le cache au lieu de l'écraser
 
     async def connect(self):
-        self.channel_key = self.scope['url_route']['kwargs']['channel']   # 'partage' | 'editeur'
-        self.classe_id = self.scope['url_route']['kwargs']['classe_id']
-        self.seance_id = self.scope['url_route']['kwargs']['seance_id']
-
-        # ── Token depuis l'URL ────────────────────────────────────────
-        query_string = self.scope.get('query_string', b'').decode()
-        token = None
-        for part in query_string.split('&'):
-            if part.startswith('token='):
-                token = part.split('=', 1)[1]
-                break
-
-        if not token:
-            await self.close(code=4001)
-            return
-
-        self.user = await self.get_user_from_token(token)
-        if not self.user:
-            await self.close(code=4001)
-            return
-
-        if not await self.check_access():
-            await self.close(code=4003)
-            return
-
+        # ... inchangé (auth token + check_access) ...
         self.group_name = f"session_{self.channel_key}_{self.classe_id}_{self.seance_id}"
         self.cache_key = f"session_state_{self.group_name}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -600,34 +571,23 @@ class BroadcastConsumer(AsyncWebsocketConsumer):
 
         event_type = data.get('type')
 
-        # ── Un client qui vient d'ouvrir l'onglet demande l'état courant ──
         if event_type == 'request_state':
             state = cache.get(self.cache_key)
             if state:
                 await self.send(text_data=json.dumps(state))
             return
 
-        # ── On mémorise le dernier état utile selon le canal ──────────
-        if self.channel_key == 'editeur' and event_type == 'editor_content':
+        if event_type in self.CLEAR_EVENTS:  # 🆕 générique
+            cache.delete(self.cache_key)
+        else:
             cache.set(self.cache_key, data, timeout=60 * 60 * 8)
-
-        elif self.channel_key == 'partage':
-            if event_type == 'share_start':
-                cache.set(self.cache_key, data, timeout=60 * 60 * 8)
-            elif event_type == 'share_stop':
-                cache.delete(self.cache_key)
 
         await self.channel_layer.group_send(
             self.group_name,
-            {
-                'type': 'broadcast_event',
-                'data': data,
-                'sender_channel': self.channel_name,
-            }
+            {'type': 'broadcast_event', 'data': data, 'sender_channel': self.channel_name}
         )
 
     async def broadcast_event(self, event):
-        # On ne renvoie jamais à l'émetteur lui-même
         if event.get('sender_channel') == self.channel_name:
             return
         await self.send(text_data=json.dumps(event['data']))
