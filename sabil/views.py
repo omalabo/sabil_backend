@@ -530,7 +530,20 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
         if not fichier:
             raise serializers.ValidationError({'fichier_local': 'Fichier requis.'})
         ext = (fichier.name.rsplit('.', 1)[-1] if '.' in fichier.name else '').lower()
-        type_fichier = 'pdf' if ext == 'pdf' else 'docx' if ext in ('doc', 'docx') else 'image'
+        # 🆕 AJOUT de pptx/ppt
+        if ext == 'pdf':
+            type_fichier = 'pdf'
+        elif ext in ('doc', 'docx'):
+            type_fichier = 'docx'
+        elif ext in ('ppt', 'pptx'):           # 🆕
+            type_fichier = 'pptx'              # 🆕
+        elif ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
+            type_fichier = 'image'
+        else:
+            raise serializers.ValidationError({
+                'fichier_local': f'Format .{ext} non supporté. Utilisez PDF, PPTX, DOCX ou image.'
+            })
+        
         serializer.save(
             id=uuid.uuid4(),
             professeur=self.request.user,
