@@ -8,7 +8,7 @@ websocket_urlpatterns = [
         TableauConsumer.as_asgi()
     ),
     re_path(
-        r'ws/session/(?P<channel>partage|editeur)/(?P<classe_id>[^/]+)/(?P<seance_id>[^/]+)/$',
+        r'ws/session/(?P<channel>[\w-]+)/(?P<classe_id>[^/]+)/(?P<seance_id>[^/]+)/$',
         BroadcastConsumer.as_asgi()
     ),
 ]
