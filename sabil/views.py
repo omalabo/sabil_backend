@@ -529,14 +529,15 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
         fichier = self.request.FILES.get('fichier_local')
         if not fichier:
             raise serializers.ValidationError({'fichier_local': 'Fichier requis.'})
+        
         ext = (fichier.name.rsplit('.', 1)[-1] if '.' in fichier.name else '').lower()
-        # 🆕 AJOUT de pptx/ppt
+        
         if ext == 'pdf':
             type_fichier = 'pdf'
         elif ext in ('doc', 'docx'):
             type_fichier = 'docx'
-        elif ext in ('ppt', 'pptx'):           # 🆕
-            type_fichier = 'pptx'              # 🆕
+        elif ext in ('ppt', 'pptx'):
+            type_fichier = 'pptx'
         elif ext in ('png', 'jpg', 'jpeg', 'gif', 'webp'):
             type_fichier = 'image'
         else:
@@ -552,8 +553,9 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
             taille_bytes=fichier.size,
             type_fichier=type_fichier,
             created_at=timezone.now(),
+            fichier_local=fichier,  # 🚨 C'ÉTAIT ÇA LE PROBLÈME ! Ajoute cette ligne.
         )
-
+     
     def perform_destroy(self, instance):
         # Seul le prof qui l'a uploadé (ou admin/direction) peut supprimer
         if instance.professeur_id != self.request.user.id and self.request.user.role not in ('admin', 'direction'):
