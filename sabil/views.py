@@ -563,10 +563,22 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
 
 
 class BroadcastConsumer(AsyncWebsocketConsumer):
-    CLEAR_EVENTS = {'share_stop', 'end'}  # 🆕 types qui vident le cache au lieu de l'écraser
+    CLEAR_EVENTS = {'share_stop', 'end'}
 
     async def connect(self):
-        # ... inchangé (auth token + check_access) ...
+        # 🆕 Récupérer le channel depuis les kwargs URL
+        self.channel_key = self.scope['url_route']['kwargs']['channel']
+        self.classe_id = self.scope['url_route']['kwargs']['classe_id']
+        self.seance_id = self.scope['url_route']['kwargs']['seance_id']
+        
+        # Auth
+        token = self.scope['query_string'].decode()
+        token = token.split('token=')[1] if 'token=' in token else None
+        self.user = await self.get_user_from_token(token)
+        if not self.user or not await self.check_access():
+            await self.close()
+            return
+        
         self.group_name = f"session_{self.channel_key}_{self.classe_id}_{self.seance_id}"
         self.cache_key = f"session_state_{self.group_name}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -590,7 +602,7 @@ class BroadcastConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps(state))
             return
 
-        if event_type in self.CLEAR_EVENTS:  # 🆕 générique
+        if event_type in self.CLEAR_EVENTS:
             cache.delete(self.cache_key)
         else:
             cache.set(self.cache_key, data, timeout=60 * 60 * 8)
