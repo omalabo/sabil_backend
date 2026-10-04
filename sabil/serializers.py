@@ -392,9 +392,18 @@ class LivreClasseSerializer(serializers.ModelSerializer):
     def get_fichier_url(self, obj):
         if not obj.fichier_local:
             return None
+        
         request = self.context.get('request')
         url = obj.fichier_local.url
-        return request.build_absolute_uri(url) if request else url
+        
+        if request:
+            abs_url = request.build_absolute_uri(url)
+            # 🆕 CORRECTION : Forcer HTTPS pour éviter l'erreur "Mixed Content" du navigateur
+            if abs_url.startswith('http://'):
+                abs_url = abs_url.replace('http://', 'https://', 1)
+            return abs_url
+            
+        return url
 
     def get_taille_ko(self, obj):
         return round(obj.taille_bytes / 1024) if obj.taille_bytes else None
