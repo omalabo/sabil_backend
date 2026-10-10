@@ -38,14 +38,9 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from decimal import Decimal,ROUND_HALF_UP
  
 import json
-from asgiref.sync import sync_to_async
-from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.core.cache import cache
-
-
-
 
 from django.utils.timezone import localdate
 
@@ -569,43 +564,23 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
-
-
-
-CACHE_TTL = 60 * 60 * 8
-
-
 class BroadcastConsumer(AsyncWebsocketConsumer):
     CLEAR_EVENTS = {'share_stop', 'end'}
 
-    # Seul le professeur peut piloter la présentation et annoter
-    PRESENTER_ONLY = {
-        'presentation_start', 'presentation_page', 'presentation_stop', 'presentation_scroll',
-        'anno_draw', 'anno_clear', 'anno_state', 'anno_page_change',
-    }
-
-    # ── Cache (appels synchrones déportés dans un thread) ──
-    _get = staticmethod(sync_to_async(cache.get))
-    _set = staticmethod(sync_to_async(cache.set))
-    _del = staticmethod(sync_to_async(cache.delete))
-
-    def _k(self, slot):
-        return f"{self.cache_key}:{slot}"
-
     async def connect(self):
+        # 🆕 Récupérer le channel depuis les kwargs URL
         self.channel_key = self.scope['url_route']['kwargs']['channel']
         self.classe_id = self.scope['url_route']['kwargs']['classe_id']
         self.seance_id = self.scope['url_route']['kwargs']['seance_id']
-        self.is_professor = False
-
+        
         # Auth
-        qs = parse_qs(self.scope['query_string'].decode())
-        token = (qs.get('token') or [None])[0]
+        token = self.scope['query_string'].decode()
+        token = token.split('token=')[1] if 'token=' in token else None
         self.user = await self.get_user_from_token(token)
         if not self.user or not await self.check_access():
             await self.close()
             return
-
+        
         self.group_name = f"session_{self.channel_key}_{self.classe_id}_{self.seance_id}"
         self.cache_key = f"session_state_{self.group_name}"
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -623,58 +598,21 @@ class BroadcastConsumer(AsyncWebsocketConsumer):
 
         event_type = data.get('type')
 
-        # Un nouvel arrivant reçoit : état générique, présentation en cours, annotation courante
         if event_type == 'request_state':
-            for slot in ('default', 'pres', 'anno'):
-                state = await self._get(self._k(slot))
-                if state:
-                    await self.send(text_data=json.dumps(state))
+            state = cache.get(self.cache_key)
+            if state:
+                await self.send(text_data=json.dumps(state))
             return
 
-        # Les élèves ne peuvent ni piloter la présentation ni annoter
-        if event_type in self.PRESENTER_ONLY and not self.is_professor:
-            return
-
-        await self._update_cache(event_type, data)
+        if event_type in self.CLEAR_EVENTS:
+            cache.delete(self.cache_key)
+        else:
+            cache.set(self.cache_key, data, timeout=60 * 60 * 8)
 
         await self.channel_layer.group_send(
             self.group_name,
             {'type': 'broadcast_event', 'data': data, 'sender_channel': self.channel_name}
         )
-
-    async def _update_cache(self, event_type, data):
-        # Messages éphémères : relayés seulement, jamais mis en cache
-        if event_type in ('presentation_scroll', 'anno_draw'):
-            return
-
-        if event_type == 'presentation_start':
-            await self._set(self._k('pres'), data, CACHE_TTL)
-            await self._del(self._k('anno'))
-
-        elif event_type == 'presentation_page':
-            pres = await self._get(self._k('pres'))
-            if pres:
-                pres = {**pres, 'type': 'presentation_start', 'page': data.get('page', pres.get('page', 1))}
-                await self._set(self._k('pres'), pres, CACHE_TTL)
-            await self._del(self._k('anno'))
-
-        elif event_type == 'presentation_stop':
-            await self._del(self._k('pres'))
-            await self._del(self._k('anno'))
-
-        elif event_type == 'anno_state':
-            await self._set(self._k('anno'), data, CACHE_TTL)
-
-        elif event_type in ('anno_clear', 'anno_page_change'):
-            await self._del(self._k('anno'))
-
-        elif event_type in self.CLEAR_EVENTS:
-            for slot in ('default', 'pres', 'anno'):
-                await self._del(self._k(slot))
-
-        else:
-            # Comportement d'origine pour les autres types de messages (partage d'écran, etc.)
-            await self._set(self._k('default'), data, CACHE_TTL)
 
     async def broadcast_event(self, event):
         if event.get('sender_channel') == self.channel_name:
@@ -705,7 +643,6 @@ class BroadcastConsumer(AsyncWebsocketConsumer):
             classe = Classes.objects.get(id=self.classe_id)
 
             if classe.professeur_id == self.user.id:
-                self.is_professor = True
                 return True
 
             return Inscriptions.objects.filter(
