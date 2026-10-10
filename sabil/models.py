@@ -177,6 +177,9 @@ class FichiersDevoir(models.Model):
 
 
 class Diplomes(models.Model):
+    class Statut(models.TextChoices):
+        ACTIF = 'active', 'Actif'
+        ANNULE = 'cancelled', 'Annulé'
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     eleve = models.ForeignKey('Users', models.DO_NOTHING,related_name='eleve_id')
     classe = models.ForeignKey(Classes, models.DO_NOTHING)
@@ -203,6 +206,21 @@ class Diplomes(models.Model):
     type_fichier = models.CharField(max_length=50, blank=True, null=True, help_text="Ex: png, jpg, pdf")
     mime_type = models.CharField(max_length=100, blank=True, null=True, help_text="Ex: image/png")
     taille_bytes = models.BigIntegerField(blank=True, null=True)
+    # ✅ NOUVEAUX CHAMPS
+    statut = models.CharField(
+        max_length=20,
+        choices=Statut.choices,
+        default=Statut.ACTIF,
+        db_index=True
+    )
+    annule_at = models.DateTimeField(null=True, blank=True)
+    annule_par = models.ForeignKey(
+        'Users', models.SET_NULL,
+        null=True, blank=True,
+        related_name='diplomes_annules'
+    )
+    motif_annulation = models.TextField(blank=True, null=True)
+
 
     class Meta:
         ordering = ['-created_at']
