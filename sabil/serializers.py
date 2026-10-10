@@ -740,10 +740,14 @@ class DiplomeSerializer(serializers.ModelSerializer):
     classe_nom = serializers.CharField(source='classe.nom', read_only=True)
     professeur_nom = serializers.CharField(source='professeur.display_name', read_only=True)
     image_diplome = serializers.FileField(required=False, allow_null=True)
+    statut = serializers.CharField(read_only=True)  # ✅ lecture seule (géré via actions)
+    annule_at = serializers.DateTimeField(read_only=True)
+    motif_annulation = serializers.CharField(read_only=True)
+    
     class Meta:
         model = Diplomes
         fields = '__all__'
-        read_only_fields = ['created_at', 'delivre_at','professeur','nom_original', 'nom_stockage', 'type_fichier', 'mime_type', 'taille_bytes']
+        read_only_fields = ['created_at', 'delivre_at','professeur','nom_original', 'nom_stockage', 'type_fichier', 'mime_type', 'taille_bytes','statut', 'annule_at', 'annule_par', 'motif_annulation']
 
 class ContratSerializer(serializers.ModelSerializer):
     eleve_nom = serializers.CharField(source='eleve.display_name', read_only=True)
