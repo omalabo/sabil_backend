@@ -2391,63 +2391,170 @@ class MyDiplomesView(generics.ListAPIView):
         return Diplomes.objects.filter(eleve=self.request.user).order_by('-delivre_at')
 
 
+
 class DiplomeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DiplomeSerializer
-    
-    # ✅ Indispensable : permet à DRF de comprendre le FormData (texte + fichier)
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
         user = self.request.user
-        qs = Diplomes.objects.select_related('eleve', 'classe', 'professeur').order_by('-created_at')
+        qs = Diplomes.objects.select_related('eleve', 'classe', 'professeur', 'annule_par').order_by('-created_at')
 
         if hasattr(user, 'role') and user.role == 'professeur':
             qs = qs.filter(professeur=user)
         if hasattr(user, 'role') and user.role == 'eleve':
-            qs = qs.filter(eleve=user)
+            # ✅ Élève : ne voit que les diplômes ACTIFS
+            qs = qs.filter(eleve=user, statut='active')
 
         # Filtres optionnels
         classe_id = self.request.query_params.get('classe_id')
         eleve_id = self.request.query_params.get('eleve_id')
+        statut = self.request.query_params.get('statut')  # ✅ NOUVEAU
+        search = self.request.query_params.get('search')   # ✅ NOUVEAU
+
         if classe_id:
             qs = qs.filter(classe_id=classe_id)
         if eleve_id:
             qs = qs.filter(eleve_id=eleve_id)
+        if statut and statut in ['active', 'cancelled']:
+            qs = qs.filter(statut=statut)
+        if search:
+            qs = qs.filter(
+                models.Q(nom_eleve_diplome__icontains=search) |
+                models.Q(matiere__icontains=search)
+            )
 
         return qs
 
-    # ✅ On ne touche PAS à la méthode create(). 
-    # DRF appellera automatiquement :
-    # 1. serializer = self.get_serializer(data=request.data)
-    # 2. serializer.is_valid(raise_exception=True)
-    # 3. self.perform_create(serializer)  <--- C'est ici qu'on intervient
-
     def perform_create(self, serializer):
-        # 1. On récupère le fichier brut envoyé par le frontend (GenerateurDiplome.tsx)
         fichier = self.request.FILES.get('image_diplome')
-        
-        # 2. On sauvegarde l'instance via le serializer. 
-        # C'est cette ligne qui déclenche l'enregistrement physique du fichier sur le disque 
-        # et la sauvegarde des champs texte (classe, eleve, matiere, etc.)
         instance = serializer.save(
             professeur=self.request.user,
             created_at=timezone.now(),
+            statut='active'  # ✅ explicite
         )
-        
-        # 3. Si un fichier a bien été fourni, on extrait et on sauvegarde ses métadonnées
         if fichier:
             instance.nom_original = fichier.name
-            instance.nom_stockage = instance.image_diplome.name # Le nom tel qu'enregistré par Django (avec le dossier %Y/%m/)
+            instance.nom_stockage = instance.image_diplome.name
             instance.type_fichier = fichier.name.split('.')[-1].lower() if '.' in fichier.name else ''
             instance.mime_type = fichier.content_type
             instance.taille_bytes = fichier.size
-            
-            # On met à jour uniquement ces champs en base pour une requête SQL ultra-rapide
             instance.save(update_fields=[
                 'nom_original', 'nom_stockage', 'type_fichier', 'mime_type', 'taille_bytes'
             ])
 
+    # ✅ ACTION : Annuler un diplôme
+    @action(detail=True, methods=['patch'], url_path='annuler')
+    def annuler(self, request, pk=None):
+        diplome = self.get_object()
+        
+        # Sécurité : seul le prof propriétaire peut annuler
+        if diplome.professeur != request.user:
+            return Response(
+                {'detail': 'Vous ne pouvez annuler que vos propres diplômes.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if diplome.statut == 'cancelled':
+            return Response(
+                {'detail': 'Ce diplôme est déjà annulé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        motif = request.data.get('motif', '')
+        diplome.statut = 'cancelled'
+        diplome.annule_at = timezone.now()
+        diplome.annule_par = request.user
+        diplome.motif_annulation = motif
+        diplome.save(update_fields=['statut', 'annule_at', 'annule_par', 'motif_annulation'])
+        
+        return Response(DiplomeSerializer(diplome).data)
+
+    # ✅ ACTION : Réactiver un diplôme annulé
+    @action(detail=True, methods=['patch'], url_path='reactiver')
+    def reactiver(self, request, pk=None):
+        diplome = self.get_object()
+        
+        if diplome.professeur != request.user:
+            return Response(
+                {'detail': 'Vous ne pouvez réactiver que vos propres diplômes.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if diplome.statut == 'active':
+            return Response(
+                {'detail': 'Ce diplôme est déjà actif.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        diplome.statut = 'active'
+        diplome.annule_at = None
+        diplome.annule_par = None
+        diplome.motif_annulation = None
+        diplome.save(update_fields=['statut', 'annule_at', 'annule_par', 'motif_annulation'])
+        
+        return Response(DiplomeSerializer(diplome).data)
+
+    # ✅ SURCHARGE : suppression uniquement si annulé
+    def destroy(self, request, *args, **kwargs):
+        diplome = self.get_object()
+        
+        if diplome.professeur != request.user:
+            return Response(
+                {'detail': 'Vous ne pouvez supprimer que vos propres diplômes.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        if diplome.statut != 'cancelled':
+            return Response(
+                {'detail': 'Vous devez d\'abord annuler le diplôme avant de le supprimer.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Suppression physique du fichier sur le disque
+        if diplome.image_diplome:
+            try:
+                diplome.image_diplome.delete(save=False)
+            except Exception as e:
+                print(f"Erreur suppression fichier: {e}")
+
+        return super().destroy(request, *args, **kwargs)
+
+    # ✅ SURCHARGE : update avec régénération d'image si nécessaire
+    def update(self, request, *args, **kwargs):
+        diplome = self.get_object()
+        
+        if diplome.professeur != request.user:
+            return Response(
+                {'detail': 'Vous ne pouvez modifier que vos propres diplômes.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Si une nouvelle image est fournie, on la remplace
+        nouveau_fichier = request.FILES.get('image_diplome')
+        if nouveau_fichier and diplome.image_diplome:
+            try:
+                diplome.image_diplome.delete(save=False)
+            except Exception:
+                pass
+
+        response = super().update(request, *args, **kwargs)
+        
+        # Mise à jour des métadonnées si nouveau fichier
+        if nouveau_fichier:
+            diplome = self.get_object()
+            diplome.nom_original = nouveau_fichier.name
+            diplome.nom_stockage = diplome.image_diplome.name
+            diplome.type_fichier = nouveau_fichier.name.split('.')[-1].lower()
+            diplome.mime_type = nouveau_fichier.content_type
+            diplome.taille_bytes = nouveau_fichier.size
+            diplome.save(update_fields=[
+                'nom_original', 'nom_stockage', 'type_fichier', 'mime_type', 'taille_bytes'
+            ])
+
+        return response
+     
 
 class ElevesByClasseView(APIView):
     permission_classes = [permissions.IsAuthenticated]
