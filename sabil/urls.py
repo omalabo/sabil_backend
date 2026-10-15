@@ -74,6 +74,8 @@ router.register(r'livres-classe', views.LivreClasseViewSet, basename='livres-cla
 
 urlpatterns = [
     # urls.py
+
+    path('api/livekit/screen-share-token/', views.screen_share_token, name='screen_share_token'),
     path('mes-diplomes/', views.MyDiplomesView.as_view(), name='my-diplomes'),
     # Enregistrement vidéo LiveKit
     path('classes/<uuid:classe_id>/toggle-recording/', views.toggle_recording, name='toggle_recording'),
