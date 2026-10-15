@@ -653,7 +653,38 @@ class BroadcastConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Erreur check_access: {e}")
             return False
-         
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def screen_share_token(request):
+    """Génère un token LiveKit pour le partage d'écran natif (identité suffixée _screen)"""
+    room_name = request.data.get('room_name')
+    identity = request.data.get('identity') or f"{request.user.id}_screen"
+    
+    if not room_name:
+        return Response({'error': 'room_name requis'}, status=400)
+    
+    # Utilise les mêmes clés que ton endpoint de token principal
+    LIVEKIT_URL = "wss://live.sabil-al-ilm.org"  # adapte
+    LIVEKIT_API_KEY = "ta_cle_api"  # adapte
+    LIVEKIT_API_SECRET = "ton_secret"  # adapte
+    
+    lk_api = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+    
+    token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET).with_identity(identity).with_grants(
+        api.VideoGrants(
+            room_join=True,
+            room=room_name,
+            can_publish=True,
+            can_subscribe=True,
+        )
+    ).to_jwt()
+    
+    return Response({'token': token, 'identity': identity})
+
+
      
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
