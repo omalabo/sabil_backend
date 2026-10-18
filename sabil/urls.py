@@ -75,14 +75,13 @@ router.register(r'livres-classe', views.LivreClasseViewSet, basename='livres-cla
 urlpatterns = [
     # urls.py
 
-    path('api/livekit/screen-share-token/', views.screen_share_token, name='screen_share_token'),
     path('mes-diplomes/', views.MyDiplomesView.as_view(), name='my-diplomes'),
     # Enregistrement vidéo LiveKit
     path('classes/<uuid:classe_id>/toggle-recording/', views.toggle_recording, name='toggle_recording'),
 
     # Webhook LiveKit (appelé par le serveur LiveKit)
     path('livekit/webhook/', views.livekit_webhook, name='livekit_webhook'),
-    
+    path('screen-share-token/', views.screen_share_token, name='screen-share-token'),
     path('classes/<uuid:classe_id>/eleves/', views.ElevesByClasseView.as_view(), name='classe-eleves'),
 
     path('auth/save-expo-token/', views.save_expo_token_view, name='save-expo-token'),
