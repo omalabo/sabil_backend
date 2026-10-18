@@ -69,7 +69,7 @@ from sabil.authentication import LiveKitWebhookAuthentication
 from rest_framework.permissions import AllowAny
 import requests
 
-# ... (tes constantes LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+# ... (tes constantes LIVEKIT_URL, , LIVEKIT_API_SECRET)
 
 
 
@@ -94,7 +94,7 @@ def toggle_recording(request, classe_id):
     egress_ids_to_stop = request.data.get('egress_ids_to_stop', [])
     if egress_ids_to_stop:
         async def _stop():
-            lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
+            lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=, api_secret=LIVEKIT_API_SECRET)
             try:
                 for eid in egress_ids_to_stop:
                     try:
@@ -115,7 +115,7 @@ def toggle_recording(request, classe_id):
 
     # 3. Sinon → ON DÉMARRE UN NOUVEL ENREGISTREMENT. UN POINT C'EST TOUT.
     async def _start():
-        lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
+        lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=, api_secret=LIVEKIT_API_SECRET)
         try:
             # Audio
             timestamp = int(datetime.now().timestamp())
@@ -229,7 +229,7 @@ def livekit_webhook(request):
         
                 #if audio_actif:
                 async def _start_screen():
-                    lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
+                    lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=, api_secret=LIVEKIT_API_SECRET)
                     try:
                         timestamp = int(datetime.now().timestamp())
                         filename = f"screen_{classe.id}_{timestamp}.webm"
@@ -668,8 +668,8 @@ def screen_share_token(request):
     
     # Utilise les mêmes clés que ton endpoint de token principal
     LIVEKIT_URL = "wss://live.sabil-al-ilm.org"  # adapte
-    LIVEKIT_API_KEY = "ta_cle_api"  # adapte
-    LIVEKIT_API_SECRET = "ton_secret"  # adapte
+    LIVEKIT_API_KEY = "APImyschool2026"  # adapte
+    LIVEKIT_API_SECRET = "secretmyschool2026xK9mP3qR7vL2nW8"  # adapte
     
     lk_api = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
     
