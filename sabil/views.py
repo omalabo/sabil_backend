@@ -94,7 +94,7 @@ def toggle_recording(request, classe_id):
     egress_ids_to_stop = request.data.get('egress_ids_to_stop', [])
     if egress_ids_to_stop:
         async def _stop():
-            lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=, api_secret=LIVEKIT_API_SECRET)
+            lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
             try:
                 for eid in egress_ids_to_stop:
                     try:
@@ -115,7 +115,7 @@ def toggle_recording(request, classe_id):
 
     # 3. Sinon → ON DÉMARRE UN NOUVEL ENREGISTREMENT. UN POINT C'EST TOUT.
     async def _start():
-        lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=, api_secret=LIVEKIT_API_SECRET)
+        lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
         try:
             # Audio
             timestamp = int(datetime.now().timestamp())
@@ -229,7 +229,7 @@ def livekit_webhook(request):
         
                 #if audio_actif:
                 async def _start_screen():
-                    lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=, api_secret=LIVEKIT_API_SECRET)
+                    lkapi = api.LiveKitAPI(LIVEKIT_URL, api_key=LIVEKIT_API_KEY, api_secret=LIVEKIT_API_SECRET)
                     try:
                         timestamp = int(datetime.now().timestamp())
                         filename = f"screen_{classe.id}_{timestamp}.webm"
