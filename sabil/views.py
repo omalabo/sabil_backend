@@ -666,12 +666,6 @@ def screen_share_token(request):
     if not room_name:
         return Response({'error': 'room_name requis'}, status=400)
     
-    # Utilise les mêmes clés que ton endpoint de token principal
-    LIVEKIT_URL = "wss://live.sabil-al-ilm.org"  # adapte
-    LIVEKIT_API_KEY = "APImyschool2026"  # adapte
-    LIVEKIT_API_SECRET = "secretmyschool2026xK9mP3qR7vL2nW8"  # adapte
-    
-    lk_api = api.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
     
     token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET).with_identity(identity).with_grants(
         api.VideoGrants(
