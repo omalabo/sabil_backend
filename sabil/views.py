@@ -667,17 +667,21 @@ def screen_share_token(request):
         return Response({'error': 'room_name requis'}, status=400)
     
     
-    token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET).with_identity(identity).with_grants(
-        api.VideoGrants(
+    token = (
+        api.AccessToken(settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)
+        .with_identity(f"{request.user.id}_screen")          # imposée par le serveur
+        .with_name(f"{request.user.get_full_name() or request.user.username} (écran)")
+        .with_grants(api.VideoGrants(
             room_join=True,
             room=room_name,
             can_publish=True,
-            can_subscribe=True,
-            can_publish_sources=["screen", "microphone"],
-        )
-    ).to_jwt()
+            can_subscribe=False,
+            can_publish_sources=["screen_share"],
+        ))
+        .to_jwt()
+    )
+    return Response({'token': token, 'identity': f"{request.user.id}_screen"})
     
-    return Response({'token': token, 'identity': identity})
 
 
      
