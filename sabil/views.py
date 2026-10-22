@@ -673,6 +673,7 @@ def screen_share_token(request):
             room=room_name,
             can_publish=True,
             can_subscribe=True,
+            can_publish_sources=["screen"],
         )
     ).to_jwt()
     
