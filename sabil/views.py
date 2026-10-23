@@ -668,7 +668,7 @@ def screen_share_token(request):
     
     
     token = (
-        api.AccessToken(settings.LIVEKIT_API_KEY, settings.LIVEKIT_API_SECRET)
+        api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
         .with_identity(f"{request.user.id}_screen")          # imposée par le serveur
         .with_name(f"{request.user.get_full_name() or request.user.username} (écran)")
         .with_grants(api.VideoGrants(
