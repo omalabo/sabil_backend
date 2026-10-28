@@ -9,6 +9,7 @@
 
 import uuid
 from django.contrib.auth.models import AbstractBaseUser
+from django.utils import timezone
 from django.db import models
 
 
