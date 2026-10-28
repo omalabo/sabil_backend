@@ -684,6 +684,122 @@ def screen_share_token(request):
     
 
 
+
+
+
+ROLES_ECRITURE = ('professeur', 'direction')
+STATUTS = {'en_cours', 'termine'}
+ 
+ 
+def _role(user):
+    return getattr(user, 'role', None)
+ 
+ 
+def _eleve_valide(eleve_id):
+    try:
+        _uuid.UUID(str(eleve_id))
+    except (ValueError, TypeError):
+        return False
+    return Users.objects.filter(id=eleve_id, role='eleve').exists()
+ 
+ 
+def _peut_ecrire(user, eleve_id):
+    if _role(user) not in ROLES_ECRITURE:
+        return False
+    # ⚠️ TODO SÉCURITÉ : restreindre un professeur à SES élèves, par ex. :
+    # if _role(user) == 'professeur':
+    #     return Inscriptions.objects.filter(classe__professeur=user, eleve_id=eleve_id).exists()
+    return True
+ 
+ 
+def _construire_etat(eleve_id):
+    rows = ProgressionEleve.objects.filter(eleve_id=eleve_id).values_list(
+        'programme_code', 'item_code', 'statut'
+    )
+    etat = {}
+    for prog, item, statut in rows:
+        etat.setdefault(prog, {})[item] = statut
+ 
+    resume = []
+    for p in PROGRAMMES:
+        total = len(p['items'])
+        m = etat.get(p['code'], {})
+        termine = sum(1 for it in p['items'] if m.get(it['code']) == 'termine')
+        en_cours = sum(1 for it in p['items'] if m.get(it['code']) == 'en_cours')
+        resume.append({
+            'programme_code': p['code'],
+            'total': total,
+            'termine': termine,
+            'en_cours': en_cours,
+            # 1 livre/chapitre terminé = +1/total ; "en cours" ne compte pas
+            'pourcentage': round(100 * termine / total) if total else 0,
+        })
+    return {'eleve_id': str(eleve_id), 'etat': etat, 'resume': resume}
+ 
+ 
+class ProgressionViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+ 
+    # GET /progressions/catalogue/
+    @action(detail=False, methods=['get'], url_path='catalogue')
+    def catalogue(self, request):
+        return Response(PROGRAMMES)
+ 
+    # GET /progressions/?eleve_id=<uuid>
+    def list(self, request):
+        user = request.user
+        eleve_id = request.query_params.get('eleve_id')
+        if _role(user) == 'eleve':
+            eleve_id = str(user.id)            # un élève ne voit que la sienne
+        elif _role(user) not in ROLES_ECRITURE:
+            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+        if not eleve_id or not _eleve_valide(eleve_id):
+            return Response({'detail': 'eleve_id invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_construire_etat(eleve_id))
+ 
+    # PUT /progressions/enregistrer/
+    # body: { eleve_id, changes: [{programme_code, item_code, statut: 'en_cours'|'termine'|null}] }
+    @action(detail=False, methods=['put'], url_path='enregistrer')
+    def enregistrer(self, request):
+        eleve_id = request.data.get('eleve_id')
+        changes = request.data.get('changes')
+ 
+        if not _eleve_valide(eleve_id):
+            return Response({'detail': 'eleve_id invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not _peut_ecrire(request.user, eleve_id):
+            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+        if not isinstance(changes, list) or len(changes) > 400:
+            return Response({'detail': 'changes invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+        # Validation complète AVANT d'écrire quoi que ce soit
+        for c in changes:
+            p, i, s = c.get('programme_code'), c.get('item_code'), c.get('statut')
+            if p not in CODES_VALIDES or i not in CODES_VALIDES[p]:
+                return Response({'detail': f'Item inconnu : {p}/{i}'}, status=status.HTTP_400_BAD_REQUEST)
+            if s is not None and s not in STATUTS:
+                return Response({'detail': f'Statut invalide : {s}'}, status=status.HTTP_400_BAD_REQUEST)
+ 
+        now = timezone.now()
+        with transaction.atomic():
+            for c in changes:
+                p, i, s = c['programme_code'], c['item_code'], c.get('statut')
+                qs = ProgressionEleve.objects.filter(eleve_id=eleve_id, programme_code=p, item_code=i)
+                if s is None:
+                    qs.delete()                         # décoché → non commencé
+                    continue
+                obj, created = ProgressionEleve.objects.get_or_create(
+                    eleve_id=eleve_id, programme_code=p, item_code=i,
+                    defaults={'statut': s, 'updated_by': request.user,
+                              'created_at': now, 'updated_at': now},
+                )
+                if not created and obj.statut != s:
+                    obj.statut = s
+                    obj.updated_by = request.user
+                    obj.updated_at = now
+                    obj.save(update_fields=['statut', 'updated_by', 'updated_at'])
+ 
+        return Response(_construire_etat(eleve_id))
+
      
 # ─────────────────────────────────────────────
 # HELPER : calcul du retard en minutes
