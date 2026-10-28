@@ -684,7 +684,108 @@ def screen_share_token(request):
     
 
 
-
+#codes pour la gestion de progression des eleves
+def _items(prefix, labels):
+    return [{"code": f"{prefix}-{i + 1:02d}", "label": label} for i, label in enumerate(labels)]
+ 
+ 
+PROGRAMMES = [
+    {
+        "code": "alphabetisation",
+        "nom": "Alphabétisation",
+        "unite": "livre",
+        "icon": "🔤",
+        "items": _items("alphabetisation", ["Livre 1"]),
+    },
+    {
+        "code": "forqan",
+        "nom": "Forqan",
+        "unite": "livre",
+        "icon": "📚",
+        "items": _items("forqan", [
+            "Mouqadima alif", "Ta3bir", "Mouqadima ba", "Tamhidi alif", "Tamhidi ba",
+            "Moustawa 1", "Moustawa 2", "Moustawa 3", "Moustawa 4", "Moustawa 5",
+            "Moustawa 6", "Moustawa 7", "Moustawa 8", "Moustawa 9", "Moustawa 10",
+        ]),
+    },
+    {
+        "code": "tome-medine",
+        "nom": "Tome de Médine",
+        "unite": "livre",
+        "icon": "🕌",
+        "items": _items("tome-medine", [
+            "Tome de Médine – Livre 1", "Tome de Médine – Livre 2",
+            "Tome de Médine – Livre 3", "Tome de Médine – Livre 4",
+        ]),
+    },
+    {
+        "code": "expression-orale",
+        "nom": "Expression orale",
+        "unite": "livre",
+        "icon": "🎙️",
+        "items": _items("expression-orale", ["Livre 1", "Livre 2"]),
+    },
+    {
+        "code": "tajwid",
+        "nom": "Tajwid",
+        "unite": "livre",
+        "icon": "🎧",
+        "items": _items("tajwid", [
+            "Tajwid niveau 1", "Tajwid niveau 2", "Touhfatoul atfal", "Al Jazariya", "Oussoul",
+        ]),
+    },
+    {
+        "code": "aquida",
+        "nom": "Aquida",
+        "unite": "livre",
+        "icon": "🌙",
+        "items": _items("aquida", [
+            "Les 4 règles", "Les 3 fondements", "Les 6 fondements",
+            "Les annulatifs de l'islam", "Kitab at tawhid",
+            "Les noms et attributs d'Allah", "Aquida wassitiya",
+        ]),
+    },
+    {
+        "code": "fiqh",
+        "nom": "Fiqh",
+        "unite": "chapitre",          # ← seul programme géré par chapitres
+        "icon": "⚖️",
+        "items": _items("fiqh", [
+            "L'éducation des enfants", "La purification", "La prière", "Fiqh du couple",
+            "Les droits et les devoirs des femmes", "Le livre du jeûne", "Les menstruations",
+            "L'héritage", "Les leçons importantes pour l'ensemble de la communauté",
+            "Livre des transactions", "Le pèlerinage", "La zakat", "Les funérailles",
+        ]),
+    },
+    {
+        "code": "hadith-nawawi",
+        "nom": "40 Hadith Nawawi",
+        "unite": "livre",
+        "icon": "📜",
+        "items": _items("hadith-nawawi", ["Les 40 hadith Nawawi"]),
+    },
+    {
+        "code": "minhaj",
+        "nom": "Minhaj al muslim as saghir",
+        "unite": "livre",
+        "icon": "📘",
+        "items": _items("minhaj", [f"Niveau {n}" for n in range(1, 11)]),
+    },
+    {
+        "code": "sira",
+        "nom": "Sira",
+        "unite": "livre",
+        "icon": "🏜️",
+        "items": _items("sira", [
+            "Sira (La biographie du Prophète ﷺ)",
+            "Explication du poème « Al-Urjuza Al-Mi'iyya »",
+            "Al fusul fi sirat al rasoul",
+        ]),
+    },
+]
+ 
+# Index de validation : { 'fiqh': {'fiqh-01', 'fiqh-02', ...}, ... }
+CODES_VALIDES = {p["code"]: {i["code"] for i in p["items"]} for p in PROGRAMMES}
 
 
 ROLES_ECRITURE = ('professeur', 'direction')
