@@ -685,6 +685,7 @@ def screen_share_token(request):
 
 
 #codes pour la gestion de progression des eleves
+import uuid as _uuid
 def _items(prefix, labels):
     return [{"code": f"{prefix}-{i + 1:02d}", "label": label} for i, label in enumerate(labels)]
  
