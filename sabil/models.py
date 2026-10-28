@@ -228,6 +228,26 @@ class Diplomes(models.Model):
         db_table = 'diplomes'
 
 
+class ProgressionEleve(models.Model):
+    class Statut(models.TextChoices):
+        EN_COURS = 'en_cours', 'En cours'
+        TERMINE = 'termine', 'Terminé'
+ 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    eleve = models.ForeignKey('Users', models.DO_NOTHING, related_name='progressions')
+    programme_code = models.CharField(max_length=50)
+    item_code = models.CharField(max_length=80)
+    statut = models.CharField(max_length=20, choices=Statut.choices)
+    updated_by = models.ForeignKey(
+        'Users', models.SET_NULL, null=True, blank=True, related_name='progressions_modifiees'
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(default=timezone.now)
+ 
+    class Meta:
+        managed = False
+        db_table = 'progressions_eleve'
+
 class Enregistrements(models.Model):
     id = models.UUIDField(primary_key=True,default=uuid.uuid4)
     classe = models.ForeignKey(
