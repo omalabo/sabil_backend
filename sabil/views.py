@@ -2694,7 +2694,7 @@ class DiplomeViewSet(viewsets.ModelViewSet):
         instance = serializer.save(
             professeur=self.request.user,
             created_at=timezone.now(),
-            statut='active'  # ✅ explicite
+            statut='active',
             badge=badge, 
         )
         if fichier:
