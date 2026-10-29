@@ -2650,14 +2650,14 @@ class DiplomeViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
 
-     def _badge_depuis_requete(self):
-          """Retourne (present, valeur) : valeur = code valide ou None si vide."""
-          if 'badge' not in self.request.data:
-              return False, None
-          badge = (self.request.data.get('badge') or '').strip() or None
-          if badge and badge not in BADGE_CODES:
-              raise serializers.ValidationError({'badge': 'Badge inconnu.'})
-          return True, badge
+    def _badge_depuis_requete(self):
+         """Retourne (present, valeur) : valeur = code valide ou None si vide."""
+         if 'badge' not in self.request.data:
+             return False, None
+         badge = (self.request.data.get('badge') or '').strip() or None
+         if badge and badge not in BADGE_CODES:
+             raise serializers.ValidationError({'badge': 'Badge inconnu.'})
+         return True, badge
 
     def get_queryset(self):
         user = self.request.user
