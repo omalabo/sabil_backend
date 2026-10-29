@@ -192,6 +192,7 @@ class Diplomes(models.Model):
     appreciation = models.TextField(blank=True, null=True)
     delivre_at = models.DateField(blank=True, null=True)
     created_at = models.DateTimeField()
+    badge = models.CharField(max_length=40, blank=True, null=True)
 
     # ✅ NOUVEAU : image du diplôme généré (PNG)
     image_diplome = models.FileField(  # ou models.ImageField si Pillow est installé
