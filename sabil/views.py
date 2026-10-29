@@ -2638,12 +2638,26 @@ class MyDiplomesView(generics.ListAPIView):
     def get_queryset(self):
         return Diplomes.objects.filter(eleve=self.request.user).order_by('-delivre_at')
 
-
+BADGE_CODES = {
+    'ponctualite', 'assiduite', 'effort', 'progression', 'recitation',
+    'motivation', 'objectif-atteint', 'bon-comportement', 'perseverance', 'entraide',
+    'bonne-participation', 'travail-soigne', 'maitrise', 'regularite', 'respect',
+}
 
 class DiplomeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DiplomeSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+
+     def _badge_depuis_requete(self):
+          """Retourne (present, valeur) : valeur = code valide ou None si vide."""
+          if 'badge' not in self.request.data:
+              return False, None
+          badge = (self.request.data.get('badge') or '').strip() or None
+          if badge and badge not in BADGE_CODES:
+              raise serializers.ValidationError({'badge': 'Badge inconnu.'})
+          return True, badge
 
     def get_queryset(self):
         user = self.request.user
@@ -2681,6 +2695,7 @@ class DiplomeViewSet(viewsets.ModelViewSet):
             professeur=self.request.user,
             created_at=timezone.now(),
             statut='active'  # ✅ explicite
+            badge=badge, 
         )
         if fichier:
             instance.nom_original = fichier.name
@@ -2802,6 +2817,13 @@ class DiplomeViewSet(viewsets.ModelViewSet):
             ])
 
         return response
+
+    def perform_update(self, serializer):
+        present, badge = self._badge_depuis_requete()
+        if present:
+            serializer.save(badge=badge)        
+        else:
+            serializer.save()  
      
 
 class ElevesByClasseView(APIView):
