@@ -385,9 +385,9 @@ class LivreClasseSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'classe', 'professeur', 'professeur_nom',
             'titre', 'nom_original', 'fichier_url', 'type_fichier',
-            'mime_type', 'taille_ko', 'created_at',
+            'mime_type', 'taille_ko', 'created_at','source','publie_aux_eleves',
         ]
-        read_only_fields = ['id', 'professeur', 'nom_original', 'type_fichier', 'mime_type', 'created_at']
+        read_only_fields = ['id', 'professeur', 'nom_original', 'type_fichier', 'mime_type', 'created_at','source','publie_aux_eleves']
 
     def get_fichier_url(self, obj):
         if not obj.fichier_local:
