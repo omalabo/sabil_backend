@@ -518,6 +518,15 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
         classe_id = self.request.query_params.get('classe_id')
         if classe_id:
             qs = qs.filter(classe_id=classe_id)
+    
+        u = self.request.user
+        if u.role == 'professeur':
+            # ses classes : tout ; autres classes : seulement les livres de profs
+            qs = qs.filter(Q(source='professeur') | Q(classe__professeur=u))
+        elif u.role == 'direction':
+            qs = qs.filter(Q(source='professeur') | Q(publie_aux_eleves=True) | Q(professeur=u))
+        else:  # élève, admin
+            qs = qs.filter(Q(source='professeur') | Q(publie_aux_eleves=True))
         return qs
 
     def get_serializer_context(self):
@@ -544,7 +553,11 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
             raise serializers.ValidationError({
                 'fichier_local': f'Format .{ext} non supporté. Utilisez PDF, PPTX, DOCX ou image.'
             })
-        
+
+        role = self.request.user.role
+        if role not in ('professeur', 'direction'):
+            raise PermissionDenied()
+        source = 'direction' if role == 'direction' else 'professeur'
         serializer.save(
             id=uuid.uuid4(),
             professeur=self.request.user,
@@ -553,15 +566,33 @@ class LivreClasseViewSet(viewsets.ModelViewSet):
             taille_bytes=fichier.size,
             type_fichier=type_fichier,
             created_at=timezone.now(),
-            fichier_local=fichier,  # 🚨 C'ÉTAIT ÇA LE PROBLÈME ! Ajoute cette ligne.
+            fichier_local=fichier,
+            source=source,
+            publie_aux_eleves=False,
         )
      
     def perform_destroy(self, instance):
-        # Seul le prof qui l'a uploadé (ou admin/direction) peut supprimer
-        if instance.professeur_id != self.request.user.id and self.request.user.role not in ('admin', 'direction'):
-            raise serializers.ValidationError('Non autorisé.')
+        u = self.request.user
+        est_prof_classe = u.role == 'professeur' and (
+            instance.professeur_id == u.id or instance.classe.professeur_id == u.id)
+        est_direction_proprio = (u.role == 'direction' and instance.professeur_id == u.id
+                                 and not instance.publie_aux_eleves)
+        if not (est_prof_classe or est_direction_proprio or u.role == 'admin'):
+            raise PermissionDenied('Non autorisé.')
         instance.fichier_local.delete(save=False)
         instance.delete()
+
+
+    @action(detail=True, methods=['patch'])
+    def publier(self, request, pk=None):
+        livre = self.get_object()
+        if request.user.role != 'professeur' or livre.classe.professeur_id != request.user.id:
+            raise PermissionDenied('Réservé au professeur de la classe.')
+        if livre.source != 'direction':
+            raise serializers.ValidationError('Seuls les documents de la direction se publient.')
+        livre.publie_aux_eleves = bool(request.data.get('publie'))
+        livre.save(update_fields=['publie_aux_eleves'])
+        return Response(self.get_serializer(livre).data)
 
 
 class BroadcastConsumer(AsyncWebsocketConsumer):
