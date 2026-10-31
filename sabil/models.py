@@ -644,6 +644,8 @@ class LivreClasse(models.Model):
     titre = models.CharField(max_length=255)
     fichier_local = models.FileField(upload_to='livres_classe/%Y/%m/')
     nom_original = models.CharField(max_length=255)
+    source = models.CharField(max_length=12, default='professeur')
+    publie_aux_eleves = models.BooleanField(default=False)
     type_fichier = models.TextField()  # 'pdf' | 'docx' | 'image'
     mime_type = models.CharField(max_length=100, blank=True, null=True)
     taille_bytes = models.BigIntegerField(blank=True, null=True)
